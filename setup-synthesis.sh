@@ -6,8 +6,9 @@ set -e  # Exit on error
 echo "🔧 Setting up Synthesis with Python 3.11..."
 echo
 
-# Navigate to synthesis directory
-cd /home/user/ixpantilia/old-ideas/synthesis
+# Navigate to synthesis directory (relative to script location)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/old-ideas/synthesis"
 
 # Remove old venv if it exists
 if [ -d ".venv" ]; then
