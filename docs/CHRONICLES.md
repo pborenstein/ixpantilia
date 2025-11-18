@@ -793,6 +793,30 @@ The ~2.8s model loading time is constant. Search time actually *decreases* sligh
 
 ---
 
+**DEC-012: Keep Synthesis Dependency Through Phase 2**
+
+**Date**: 2025-11-18
+**Context**: Phase 1 complete with tight coupling to Synthesis via direct imports
+**Decision**: Keep Synthesis as dependency through Phase 2, re-evaluate in Phase 3
+**Rationale**:
+- Saves ~700 lines of code (vault reader, embeddings, search logic)
+- Pre-computed embeddings (2,289 files) enable rapid iteration
+- Proven code handles Obsidian edge cases
+- Archaeology feature included
+- Not a bottleneck (400ms searches meet targets)
+- Small import surface (isolated to one file) makes future migration feasible
+
+**Trade-offs Accepted**:
+- Tight coupling to Synthesis codebase
+- Dependency on external project
+- Less control over implementation details
+
+**Re-evaluate after**: Phase 2 complete, 1 month real usage, or if Synthesis causes maintenance issues
+
+See Entry 5 for detailed analysis.
+
+---
+
 ### Phase 0.1 Completion
 
 **Status**: ✅ COMPLETE
@@ -841,6 +865,214 @@ Performance investigation and findings:
 5. **Don't optimize the wrong thing**: We almost went down rabbit holes (faster models, caching, grep-first) before measuring
 
 6. **Subprocess isn't always slow**: 0.008s overhead is negligible. The problem was what subprocess *forces* (fresh process = reload model)
+
+---
+
+## Entry 5: Is Synthesis Worth the Dependency? (2025-11-18)
+
+### Context
+
+Phase 1 complete with 26 passing tests and ~400ms search times. Now questioning: **Is importing Synthesis actually valuable, or are we over-complicating?**
+
+The question arose after implementation: we have tight coupling to Synthesis via direct Python imports. Could we simplify by removing this dependency entirely?
+
+### What Synthesis Provides
+
+**Immediate value (what we use)**:
+```python
+from src.embeddings import EmbeddingPipeline
+from src.embeddings.models import ModelRegistry
+from src.temporal_archaeology import TemporalArchaeologist
+
+# Our wrapper (80 lines)
+self.pipeline = EmbeddingPipeline(vault_path, storage_dir, model)
+results = self.pipeline.find_similar(query, top_k=10)
+```
+
+**Concrete benefits**:
+1. **Pre-computed embeddings** for 2,289 files (saves 15-20 min re-indexing)
+2. **Vault reader** that handles Obsidian format (markdown, frontmatter, wikilinks, dates)
+3. **5 embedding models** with validation and management
+4. **Temporal archaeology** analysis (when was I interested in X?)
+5. **Embedding storage/loading** logic (already debugged)
+6. **Proven code** - handles edge cases we haven't thought of
+
+### What We'd Have to Build
+
+If we removed Synthesis and used `sentence-transformers` directly:
+
+```python
+# Estimated ~500-800 lines of code to replace:
+
+1. Vault reader
+   - Parse markdown files
+   - Extract frontmatter (YAML)
+   - Parse dates from filenames and metadata
+   - Extract tags
+   - Handle wikilinks [[like this]]
+   - Filter by file types
+
+2. Embedding generator
+   - Batch processing for efficiency
+   - Progress bars (tqdm)
+   - Model downloading and caching
+   - Error handling for large files
+
+3. Embedding storage
+   - Save/load .npy files
+   - Metadata JSON storage
+   - Model version tracking
+   - Index validation
+
+4. Search logic
+   - Cosine similarity computation
+   - Result ranking
+   - Top-k selection
+   - Score normalization
+
+5. Model management
+   - Download models
+   - Validate model names
+   - Switch between models
+   - Handle model directory structure
+
+6. Temporal analysis (if we want archaeology)
+   - Date extraction from multiple sources
+   - Timeline building
+   - Period analysis (peaks, dormancy)
+```
+
+### Trade-off Analysis
+
+| Aspect | With Synthesis | Without Synthesis |
+|--------|---------------|-------------------|
+| **Setup time** | Instant (embeddings exist) | 15-20 min re-index |
+| **Code to maintain** | 80 lines (wrapper) | ~500-800 lines |
+| **Dependencies** | Synthesis codebase | Just sentence-transformers |
+| **Coupling** | Tight (direct imports) | Loose (own implementation) |
+| **Features** | Archaeology included | Build if needed |
+| **Control** | Limited by Synthesis API | Full control |
+| **Edge cases** | Already handled | Must discover/fix |
+| **Vault format** | Obsidian-aware | Build parser |
+| **Testing** | Synthesis is tested | Write our own tests |
+
+### Decision
+
+**DEC-012: Keep Synthesis for Phase 1-2, Evaluate for Phase 3**
+
+**Date**: 2025-11-18
+**Decision**: Keep Synthesis as dependency through Phase 2 (Gleanings Integration)
+**Rationale**:
+
+**Short-term (Phases 1-2)**:
+- It's working: 400ms searches, 26 tests passing
+- Proven code: Vault reader handles edge cases
+- Pre-computed embeddings: Valuable for rapid iteration
+- Focus on value delivery: Get gleanings extraction working first
+- Not a bottleneck: Performance meets all targets
+
+**Medium-term (Phase 3 decision point)**:
+- By Phase 3, we'll understand our actual needs better
+- Can evaluate based on real usage, not speculation
+- Architectural simplification may be worth the effort
+- Could do incremental migration (replace piece by piece)
+
+**Long-term considerations**:
+- Synthesis is maintained (it's a separate project)
+- Coupling isn't causing problems yet
+- Could become maintenance burden if Synthesis breaks
+- Future contributors might prefer simpler architecture
+
+**Re-evaluate after**:
+- Phase 2 complete (gleanings working)
+- 1 month of real usage
+- If Synthesis changes cause breaking issues
+- If we need features Synthesis doesn't support
+
+### Alternative: Hybrid Approach
+
+**If we decide to migrate in Phase 3**:
+
+1. **Phase 3a**: Implement our own vault reader
+   - Test against Synthesis for parity
+   - Keep using Synthesis embeddings
+   - A/B test both implementations
+
+2. **Phase 3b**: Implement our own embedding storage
+   - Use Synthesis-compatible format initially
+   - Migrate gradually
+
+3. **Phase 3c**: Remove Synthesis dependency
+   - Switch to direct sentence-transformers
+   - Archive Synthesis code for reference
+
+### What This Isn't
+
+**This is NOT**:
+- A criticism of Synthesis (it's excellent for its purpose)
+- An urgent problem (system works great)
+- A blocker for Phase 2
+
+**This IS**:
+- Acknowledging architectural coupling
+- Planning for long-term maintainability
+- Documenting the trade-offs for future decisions
+
+### Estimated Migration Effort
+
+If we decide to remove Synthesis later:
+
+```
+Vault reader:        2-3 days
+Embedding storage:   1 day
+Search logic:        1 day
+Model management:    1 day
+Testing:            1-2 days
+Total:              6-8 days
+```
+
+Not trivial, but doable if the coupling becomes problematic.
+
+### Current Status (End of Phase 1)
+
+**Dependencies**:
+```python
+# pyproject.toml
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sentence-transformers>=2.2.2",  # Synthesis requirement
+    "numpy>=1.24.0",                 # Synthesis requirement
+    "scikit-learn>=1.3.0",           # Synthesis requirement
+    "pyyaml>=6.0",                   # Synthesis requirement
+    "tqdm>=4.64.0",                  # Synthesis requirement
+]
+```
+
+**Import surface**:
+```python
+# src/ixpantilia/synthesis.py (only file that imports Synthesis)
+from src.embeddings import EmbeddingPipeline
+from src.embeddings.models import ModelRegistry
+from src.temporal_archaeology import TemporalArchaeologist
+```
+
+Small surface area = easier to replace later if needed.
+
+### Lesson Learned
+
+**Pragmatic dependency management**: Use good libraries when they exist, but plan for decoupling. The 80/20 rule: Synthesis gives us 80% of the functionality with 20% of the code. That's a good trade for now.
+
+**Future-friendly architecture**: By isolating Synthesis imports to one file (`synthesis.py`), we've made future migration feasible. Good architecture doesn't mean "no dependencies" - it means "dependencies that can be swapped if needed."
+
+### Key Insight
+
+The question isn't "should we ever use dependencies?" It's "are we making deliberate trade-offs?"
+
+**Right now**: Synthesis dependency is a net positive (saves ~700 lines, handles edge cases)
+**Future**: Re-evaluate when we have real usage data and clearer needs
+
+This is what "plan like waterfall, implement in agile" looks like. We planned for flexibility, implemented pragmatically, and documented the decision for future reference.
 
 ---
 
