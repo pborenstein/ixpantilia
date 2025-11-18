@@ -460,6 +460,161 @@ Questions to answer in future entries:
 
 ---
 
+## Entry 3: The Hardcoded Paths Saga (2025-11-18)
+
+### The Problem
+
+During Phase 0 validation testing in a VM environment, we discovered multiple instances of hardcoded absolute paths that broke portability:
+
+1. **Setup script**: `cd /home/user/ixpantilia/old-ideas/synthesis`
+2. **Config resolution**: `.resolve()` converting relative paths to absolute
+3. **Relative path calculation**: Hacky string replacement using `file_path.parents[2]`
+4. **Embeddings in git**: 1,981 files from Mac vault committed to repo
+
+These issues manifested as:
+- Scripts failing in VM: `No such file or directory: /System/Volumes/Data/home/user/...`
+- Search results with Mac paths: `/Users/philip/projects/ixpantilia/...`
+- Duplicate path segments: `test-vault/test-vault/Areas/...`
+- Old embeddings polluting test results
+
+### Why This Matters
+
+**Portability is non-negotiable** for this project:
+- Development happens across multiple environments (Mac, VM, future contributors)
+- Testing requires clean, reproducible environments
+- Documentation assumes paths work for anyone
+- The project itself is about *local* workflows—hardcoded paths violate that principle
+
+### The Golden Rule
+
+**GOLDEN RULE #4: No Hardcoded Paths**
+
+All paths must be:
+- ✅ **Relative** where possible (configs, scripts)
+- ✅ **Expandable** via `~` or environment variables
+- ✅ **Calculated** using proper pathlib methods (`relative_to()`)
+- ❌ **Never** contain absolute paths like `/Users/`, `/home/`, `/System/`
+
+### What We Fixed
+
+#### 1. Setup Script Portability
+**Before**:
+```bash
+cd /home/user/ixpantilia/old-ideas/synthesis
+```
+
+**After**:
+```bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/old-ideas/synthesis"
+```
+
+**Why**: Script now works from any location, on any machine.
+
+#### 2. Config Path Resolution
+**Before**:
+```python
+def get_vault_path(self) -> Optional[Path]:
+    vault_path = self.get("vault_path")
+    if vault_path:
+        return Path(vault_path).expanduser().resolve()  # <- .resolve() makes absolute
+    return None
+```
+
+**After**:
+```python
+def get_vault_path(self) -> Optional[Path]:
+    vault_path = self.get("vault_path")
+    if vault_path:
+        return Path(vault_path).expanduser()  # Keep relative
+    return None
+```
+
+**Why**: `.resolve()` converts `../../test-vault` to `/Users/philip/projects/ixpantilia/test-vault`. Removing it preserves relative paths that work across environments.
+
+#### 3. Relative Path Calculation
+**Before**:
+```python
+self.relative_path = str(file_path).replace(str(file_path.parents[2]), "").lstrip("/")
+```
+
+**After**:
+```python
+self.relative_path = str(file_path.relative_to(vault_root))
+```
+
+**Why**: Proper pathlib method instead of string hacks. `parents[2]` assumed directory depth and created bugs like `test-vault/test-vault/Areas/...`
+
+#### 4. Embeddings in .gitignore
+**Before**: Embeddings committed to repo (4.1MB, 40,288 deletions)
+
+**After**:
+```gitignore
+embeddings/
+```
+
+**Why**: Generated artifacts shouldn't be in version control. They're environment-specific and bloat the repo.
+
+### Lessons Learned
+
+1. **Test in clean environments early** - VM testing caught these issues before they became production problems
+2. **Pathlib is your friend** - Use `relative_to()`, not string manipulation
+3. **`.resolve()` is dangerous** - It seems helpful but breaks portability
+4. **Generated files don't belong in git** - Embeddings, caches, build artifacts
+5. **Scripts should be location-agnostic** - Use `$SCRIPT_DIR` patterns
+
+### Test Results
+
+After fixes:
+```bash
+# Clean relative paths ✅
+"file_path": "../../test-vault/Daily/2025/2025-11-15-Fr.md"
+
+# Correct file count ✅
+Files processed: 13
+
+# No file read errors ✅
+All paths resolve correctly
+
+# Portable config ✅
+"vault_path": "../../test-vault"
+```
+
+### Decision Log Updates
+
+**DEC-004**: All scripts must use relative paths or `$SCRIPT_DIR` pattern
+- **Context**: VM testing revealed hardcoded paths break portability
+- **Decision**: Ban absolute paths in configs and scripts
+- **Trade-off**: Slightly more complex path logic, but works everywhere
+
+**DEC-005**: Use pathlib methods, not string manipulation for paths
+- **Context**: `file_path.parents[2]` hack created duplicate path segments
+- **Decision**: Always use `.relative_to()` for path calculations
+- **Trade-off**: None—pathlib is clearer and more correct
+
+**DEC-006**: Generated artifacts go in .gitignore
+- **Context**: 1,981 embeddings from Mac committed (4.1MB)
+- **Decision**: `embeddings/` added to .gitignore
+- **Trade-off**: Each environment generates its own (correct behavior)
+
+### Commits
+
+- `1c5db13`: fix: use relative paths instead of hardcoded absolute paths
+- `4caee60`: fix: remove .resolve() to preserve relative paths in config
+- `92169b8`: chore: remove embeddings and add to .gitignore
+- `80782f3`: fix: use pathlib relative_to() for proper relative path calculation
+
+### Phase 0 Progress
+
+This work partially validates **Task 0.1: Test Synthesis Performance**:
+- ✅ Verified Synthesis processes files correctly (13 in test-vault)
+- ✅ Confirmed JSON output format
+- ✅ Validated relative path handling
+- ⚠️ Performance testing blocked by VM internet access (can't download models)
+- 📝 Need Mac testing for full performance baseline
+
+---
+
 ## Meta: How to Use This Document
 
 **When starting a new session:**

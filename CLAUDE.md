@@ -45,6 +45,13 @@
 - No categories, no complex state management
 - Simple individual files, semantic search finds connections
 
+### 6. No Hardcoded Paths
+- **Always use relative paths** in configs and scripts
+- **Never** hardcode `/Users/`, `/home/`, `/System/`, or any absolute paths
+- Use `pathlib` methods like `.relative_to()`, not string manipulation
+- Use `~` expansion or `$SCRIPT_DIR` patterns for portability
+- **Why**: Development happens across Mac, VM, and future contributor environments
+
 ---
 
 ## Architectural Constraints
