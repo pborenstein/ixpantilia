@@ -1,0 +1,641 @@
+# CLAUDE.md - Development Guide for Ixpantilia
+
+> **Purpose**: This document provides context and guidance for Claude AI when working on the Ixpantilia project across multiple sessions.
+
+**Last Updated**: 2025-11-18
+**Project Status**: Planning Phase (Phase 0 Discovery pending)
+**Current Branch**: `claude/semantic-search-server-*`
+
+---
+
+## Project Overview
+
+**Ixpantilia** is a local semantic search server for an Obsidian vault, enabling vault-first research workflows. It wraps the existing **Synthesis** semantic search engine with an HTTP API and mobile-friendly interface.
+
+**Problem Solved**: Saved links and notes accumulate but never resurface when needed during research. Ixpantilia makes your vault the first place to check before external search.
+
+**Core Architecture**: FastAPI server → Synthesis subprocess → Sentence-transformer embeddings → Results
+
+---
+
+## Key Project Principles
+
+### 1. We Are a uv Shop
+- **Always use uv** for Python dependency management
+- Never suggest pip, poetry, or other tools
+- Commands: `uv sync`, `uv run`, `uv add <package>`
+
+### 2. Plan Like Waterfall, Implement in Agile
+- Detailed upfront planning in documentation
+- Iterative implementation with small PRs
+- Each phase builds on validated previous work
+
+### 3. Mobile-First Design
+- If it doesn't work well on mobile, it doesn't work
+- Target: < 2 second response time from phone
+- Simple, clean UI optimized for small screens
+
+### 4. Privacy & Local Processing
+- No external APIs for search/embeddings (Synthesis is local)
+- LLM calls only in Phase 4 (and user-controlled)
+- Tailscale network for secure access
+
+### 5. Avoid Over-Engineering
+- Learn from old-gleanings failure (2,771 lines of complexity)
+- No categories, no complex state management
+- Simple individual files, semantic search finds connections
+
+---
+
+## Project Structure
+
+```
+ixpantilia/
+├── README.md              # Project overview (user-facing)
+├── CLAUDE.md             # This file (development guide)
+├── IMPLEMENTATION.md     # Detailed waterfall plan
+├── docs/                 # Planning documents
+│   ├── IXPANTILIA.md    # Original 847-line plan
+│   └── copilot-learnings.md  # Obsidian Copilot analysis
+├── old-ideas/           # Reference implementations
+│   ├── synthesis/       # Production search engine (DO NOT MODIFY)
+│   └── old-gleanings/   # Abandoned project (reference only)
+├── src/                 # Ixpantilia source code (to be created)
+├── tests/               # Test suite (to be created)
+├── config.example.json  # Configuration template (to be created)
+└── pyproject.toml       # uv dependencies (to be created)
+```
+
+---
+
+## Critical Context
+
+### The Synthesis Project
+
+**Location**: `old-ideas/synthesis/` (mirrored here for reference)
+**Actual Location**: `.tools/synthesis/` in main Obsidian vault
+
+**Status**: Production-ready, do NOT modify
+**Purpose**: Local semantic search engine with embeddings
+
+**Key Capabilities**:
+```bash
+# Semantic search with JSON output
+uv run main.py search "query" --json
+
+# Temporal analysis (interest archaeology)
+uv run main.py archaeology "topic" --json
+
+# Vault statistics
+uv run main.py stats
+
+# Model information
+uv run main.py models
+```
+
+**Models Available**:
+- `all-MiniLM-L6-v2` (384d, fast) - default
+- `all-mpnet-base-v2` (768d, better quality)
+- `all-MiniLM-L12-v2` (384d, better quality)
+- `paraphrase-albert-small-v2` (768d)
+- `multi-qa-mpnet-base-cos-v1` (768d, Q&A optimized)
+
+**Current Coverage**: 1,899 vault files
+
+**Ixpantilia's Role**: Call Synthesis via subprocess, parse JSON output, serve via HTTP
+
+### Old Gleanings Project
+
+**Location**: `old-ideas/old-gleanings/`
+**Status**: Abandoned (over-engineered)
+
+**Useful Parts**:
+- 505 gleanings in `gleanings_state.json` (migration source)
+- Extraction regex patterns for parsing daily notes
+- Understanding of gleaning formats
+
+**Avoid**:
+- Complex categorization system (15+ categories)
+- State management complexity
+- Web application approach
+- Manual script regeneration workflow
+
+**Lesson**: Over-engineering kills adoption. Keep Ixpantilia simple.
+
+---
+
+## Development Phases
+
+### Phase 0: Discovery & Validation (Current)
+**Goal**: Answer open questions before implementation
+
+**Tasks**:
+1. Test Synthesis performance (cold start, warm, response times)
+2. Check if daily notes are indexed (where gleanings currently live)
+3. Prototype subprocess call to Synthesis (measure overhead)
+4. Design mobile UX (mockup, test obsidian:// URIs)
+5. Extract 10-20 sample gleanings (validate end-to-end flow)
+
+**Success Criteria**: Clear answers to architecture questions, performance validated
+
+### Phase 1: Minimal Viable Search (Next)
+**Goal**: Basic semantic search working from mobile
+
+**Deliverables**:
+- FastAPI server with `/search` endpoint
+- Simple HTML/JS web UI
+- Deployed on local network via Tailscale
+- Sub-2-second response times validated
+
+**Success Criteria**: Can search vault from phone, results open in Obsidian
+
+### Phase 2: Gleanings Integration
+**Goal**: Gleanings surfaced via semantic search
+
+**Deliverables**:
+- Extraction script (`glean.py`) for daily notes
+- Migration script for 505 historical gleanings
+- Synthesis re-indexing workflow
+- Automated extraction (cron or manual trigger)
+
+**Success Criteria**: All gleanings searchable, new ones captured regularly
+
+### Phase 3: Enhanced Features
+**Goal**: Make Ixpantilia indispensable
+
+**Deliverables**:
+- `/archaeology` endpoint (temporal analysis)
+- `/stats` endpoint (vault insights)
+- Improved UI (filters, previews, model selection)
+- PWA support (installable on mobile)
+
+**Success Criteria**: Daily usage exceeds Obsidian native search
+
+### Phase 4: Vault-First LLM (Future)
+**Goal**: LLMs check vault before internet
+
+**Deliverables**:
+- `/chat` endpoint with vault context
+- Integration with Apantli LLM proxy
+- XML context format (adopted from Copilot)
+- Citation system for vault sources
+
+**Success Criteria**: Vault-first becomes default research mode
+
+---
+
+## Technical Decisions
+
+### Why FastAPI?
+- Modern async Python framework
+- Auto-generated OpenAPI docs
+- Easy testing with pytest
+- Good for calling subprocesses asynchronously
+- Familiar to most Python developers
+
+### Why Subprocess to Synthesis?
+**Alternatives considered**:
+1. Import Synthesis as Python module → tight coupling, harder to maintain
+2. Keep Synthesis as service → more complex deployment
+3. **Subprocess call** → clean separation, leverages existing CLI ✓
+
+**Trade-offs**:
+- Overhead: ~50-100ms subprocess startup
+- Isolation: Synthesis changes don't break Ixpantilia
+- Simplicity: Well-defined interface via JSON
+
+### Why Not Chunking?
+**Obsidian Copilot uses 6000-char chunks**, but Ixpantilia doesn't need this because:
+- Gleanings are small (< 500 chars typically)
+- Already atomic units (one link per note)
+- Synthesis handles short documents well
+- Reduces implementation complexity
+
+**Re-evaluate if**: Gleanings grow to include long summaries/notes
+
+### Why No Caching Initially?
+- Synthesis may already be fast (measure first!)
+- Server has more RAM than mobile (less constrained)
+- Avoid cache invalidation complexity
+- Easier to debug without caching layer
+
+**Add caching if**: Search takes > 500ms consistently, same queries repeat often
+
+### Where Should Ixpantilia Live?
+**Options**:
+1. Integrate into Apantli (LLM proxy) → single service, mixed concerns
+2. Separate service → clean separation, can be called by Apantli
+3. Inside vault like Synthesis → co-located with data
+
+**Recommendation**: Start separate, integrate with Apantli in Phase 4 if needed
+
+---
+
+## Implementation Guidelines
+
+### File Structure for Implementation
+
+```python
+# Planned structure (to be created)
+
+src/
+├── __init__.py
+├── server.py           # FastAPI app, endpoints
+├── synthesis.py        # Synthesis subprocess wrapper
+├── config.py           # Configuration management
+└── ui/
+    └── search.html     # Mobile web UI
+
+tests/
+├── test_server.py      # API endpoint tests
+├── test_synthesis.py   # Synthesis integration tests
+└── test_ui.py          # UI rendering tests
+
+config.example.json     # Template configuration
+pyproject.toml          # uv dependencies
+```
+
+### Server Implementation Pattern
+
+```python
+# src/server.py (skeleton)
+from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
+import subprocess
+import json
+from pathlib import Path
+
+app = FastAPI(title="Ixpantilia", version="0.1.0")
+
+SYNTHESIS_PATH = Path("~/.obsidian/vaults/main/.tools/synthesis").expanduser()
+
+@app.get("/search")
+async def search_vault(q: str, limit: int = 10, model: str = None):
+    """Semantic search via Synthesis"""
+
+    # Build command
+    cmd = ["uv", "run", "main.py", "search", q, "--json"]
+    if model:
+        cmd.extend(["--model", model])
+
+    # Run Synthesis (subprocess)
+    result = subprocess.run(
+        cmd,
+        cwd=SYNTHESIS_PATH,
+        capture_output=True,
+        text=True,
+        timeout=10
+    )
+
+    if result.returncode != 0:
+        return {"error": "Search failed", "stderr": result.stderr}
+
+    # Parse JSON output
+    data = json.loads(result.stdout)
+
+    return {
+        "query": q,
+        "results": data["results"][:limit],
+        "total": len(data["results"]),
+        "model": model or "default"
+    }
+
+@app.get("/")
+async def index():
+    """Serve search UI"""
+    return HTMLResponse(SEARCH_UI_HTML)
+```
+
+### Configuration Format
+
+```json
+{
+  "vault_path": "~/Obsidian/amoxtli",
+  "synthesis_path": "~/.obsidian/vaults/main/.tools/synthesis",
+  "default_model": "all-MiniLM-L6-v2",
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080
+  },
+  "search": {
+    "default_limit": 10,
+    "max_limit": 50
+  }
+}
+```
+
+### Testing Approach
+
+```python
+# tests/test_server.py
+import pytest
+from fastapi.testclient import TestClient
+from src.server import app
+
+client = TestClient(app)
+
+def test_search_endpoint():
+    response = client.get("/search?q=semantic+search")
+    assert response.status_code == 200
+    data = response.json()
+    assert "results" in data
+    assert "query" in data
+
+def test_search_with_limit():
+    response = client.get("/search?q=AI&limit=5")
+    data = response.json()
+    assert len(data["results"]) <= 5
+```
+
+### UI Implementation (Simple HTML)
+
+```html
+<!-- src/ui/search.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ixpantilia - Vault Search</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #fafafa;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      font-size: 16px;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+    }
+    .result {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+    }
+    .score {
+      color: #666;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔍 Ixpantilia</h1>
+  <input id="query" type="text" placeholder="Search your vault..." autofocus />
+  <button onclick="search()">Search</button>
+  <div id="results"></div>
+
+  <script>
+    async function search() {
+      const q = document.getElementById('query').value;
+      if (!q) return;
+
+      const res = await fetch(`/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+
+      const html = data.results.map(r => `
+        <div class="result">
+          <h3><a href="${r.obsidian_uri}">${r.title}</a></h3>
+          <div class="score">Similarity: ${r.similarity_score.toFixed(3)}</div>
+          <div style="color: #888; font-size: 0.9em">${r.relative_path}</div>
+        </div>
+      `).join('');
+
+      document.getElementById('results').innerHTML = html || '<p>No results found</p>';
+    }
+
+    document.getElementById('query').addEventListener('keypress', e => {
+      if (e.key === 'Enter') search();
+    });
+  </script>
+</body>
+</html>
+```
+
+---
+
+## Common Patterns from Copilot Analysis
+
+### XML Context Format for LLMs (Phase 4)
+
+```python
+def format_for_llm(results):
+    """Format search results for LLM context (Copilot pattern)"""
+    docs = []
+    for r in results:
+        doc = f"""<retrieved_document>
+<title>{r['title']}</title>
+<path>{r['relative_path']}</path>
+<similarity>{r['similarity_score']:.3f}</similarity>
+<content>
+{r.get('content', '')}
+</content>
+</retrieved_document>"""
+        docs.append(doc)
+
+    return "\n\n".join(docs)
+```
+
+### Grep-First Recall (If Needed for Performance)
+
+```python
+import subprocess
+from pathlib import Path
+
+def grep_filter(query: str, vault_path: Path) -> list[Path]:
+    """Fast grep to filter candidate files before Synthesis (Copilot pattern)"""
+    keywords = query.lower().split()
+    grep_pattern = "|".join(keywords)
+
+    result = subprocess.run(
+        ["grep", "-ril", "-E", grep_pattern, str(vault_path)],
+        capture_output=True,
+        text=True
+    )
+
+    paths = [Path(p) for p in result.stdout.strip().split("\n") if p]
+    return paths[:200]  # Limit like Copilot
+```
+
+---
+
+## Open Questions to Answer in Phase 0
+
+### Technical
+- [ ] Does Synthesis currently index daily notes? (where gleanings live now)
+- [ ] How fast is Synthesis search? (cold start vs warm)
+- [ ] What's the subprocess overhead for calling Synthesis?
+- [ ] Should we cache results? (measure first)
+
+### Gleanings
+- [ ] Should gleanings stay in daily notes + get extracted? Or create directly?
+- [ ] What metadata is essential vs nice-to-have?
+- [ ] How to handle duplicate gleanings?
+- [ ] What about updating existing gleanings?
+
+### UX
+- [ ] Do obsidian:// URIs work reliably on mobile?
+- [ ] Web UI vs Obsidian plugin - which first?
+- [ ] How to display results on small screens?
+- [ ] Should search history be tracked?
+
+### Deployment
+- [ ] Same server as Apantli or separate?
+- [ ] Systemd vs Docker vs simple script?
+- [ ] Where should Ixpantilia code live?
+- [ ] How to handle Synthesis updates/re-indexing?
+
+---
+
+## Git Workflow
+
+### Branch Naming
+All Claude development branches follow pattern: `claude/semantic-search-server-<session-id>`
+
+### Commit Messages
+- Use conventional commits: `feat:`, `fix:`, `docs:`, `test:`
+- Be descriptive about what changed and why
+- Example: `feat: add /search endpoint with Synthesis integration`
+
+### Push Requirements
+- Always use: `git push -u origin <branch-name>`
+- Branch must start with `claude/` and end with session ID
+- Retry up to 4 times with exponential backoff on network errors
+
+---
+
+## Success Metrics Reminder
+
+### Quantitative
+- Response time: < 2s from mobile
+- Relevance: Top 3 useful in 80%+ queries
+- Coverage: All 505+ gleanings searchable
+- Usage: 5+ searches per day
+
+### Qualitative
+- Vault-first habit formed (check before googling)
+- Finding forgotten gleanings regularly
+- Lower friction than Obsidian native search
+
+---
+
+## What Not to Do
+
+### ❌ Don't Over-Engineer
+- No complex categorization systems
+- No state management for gleanings
+- No web frameworks beyond FastAPI
+- No client-side JS frameworks (React, Vue, etc.)
+
+### ❌ Don't Modify Synthesis
+- It's production-ready and working
+- Treat as external dependency
+- Interface via subprocess + JSON only
+
+### ❌ Don't Ignore Mobile
+- Every feature must work well on phone
+- Test on actual mobile devices
+- Keep UI simple and fast
+
+### ❌ Don't Skip Discovery
+- Phase 0 must answer all open questions
+- Measure performance before optimizing
+- Validate assumptions with user (pborenstein)
+
+---
+
+## Quick Reference Commands
+
+### Development
+```bash
+# Install dependencies
+uv sync
+
+# Run server (when implemented)
+uv run src/server.py
+
+# Run tests
+uv run pytest
+
+# Format code
+uv run black src/ tests/
+
+# Type check
+uv run mypy src/
+```
+
+### Test Synthesis Directly
+```bash
+cd old-ideas/synthesis/
+uv run main.py search "semantic search" --json
+uv run main.py archaeology "AI" --json
+uv run main.py stats
+uv run main.py models
+```
+
+### Git Operations
+```bash
+# Create feature branch
+git checkout -b claude/semantic-search-server-<session-id>
+
+# Commit changes
+git add .
+git commit -m "feat: add search endpoint"
+
+# Push to remote
+git push -u origin claude/semantic-search-server-<session-id>
+```
+
+---
+
+## Resources
+
+### Documentation
+- [docs/IXPANTILIA.md](docs/IXPANTILIA.md) - Original plan (847 lines)
+- [docs/copilot-learnings.md](docs/copilot-learnings.md) - Obsidian Copilot analysis (1119 lines)
+- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Detailed waterfall plan
+- [old-ideas/synthesis/CLAUDE.md](old-ideas/synthesis/CLAUDE.md) - Synthesis project guide
+
+### External Links
+- [uv documentation](https://github.com/astral-sh/uv)
+- [FastAPI documentation](https://fastapi.tiangolo.com/)
+- [sentence-transformers](https://www.sbert.net/)
+- [Obsidian URI](https://help.obsidian.md/Extending+Obsidian/Obsidian+URI)
+
+---
+
+## Session Checklist
+
+When starting a new development session:
+
+1. ✅ Read this CLAUDE.md file
+2. ✅ Check current phase in IMPLEMENTATION.md
+3. ✅ Review open questions relevant to current phase
+4. ✅ Check git status and ensure on correct branch
+5. ✅ Run any existing tests to establish baseline
+6. ✅ Communicate plan to user before major changes
+7. ✅ Use TodoWrite to track work during session
+8. ✅ Commit frequently with clear messages
+9. ✅ Update documentation as architecture evolves
+
+---
+
+**Created**: 2025-11-18
+**For**: Claude AI development sessions
+**Owner**: pborenstein
+**Project**: Ixpantilia - Vault-First Research Workflow
