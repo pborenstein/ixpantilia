@@ -53,8 +53,9 @@
 ixpantilia/
 ├── README.md              # Project overview (user-facing)
 ├── CLAUDE.md             # This file (development guide)
-├── IMPLEMENTATION.md     # Detailed waterfall plan
 ├── docs/                 # Planning documents
+│   ├── IMPLEMENTATION.md # Detailed waterfall plan
+│   ├── CHRONICLES.md     # Design discussions & decision log
 │   ├── IXPANTILIA.md    # Original 847-line plan
 │   └── copilot-learnings.md  # Obsidian Copilot analysis
 ├── old-ideas/           # Reference implementations
@@ -607,8 +608,9 @@ git push -u origin claude/semantic-search-server-<session-id>
 
 ### Documentation
 - [docs/IXPANTILIA.md](docs/IXPANTILIA.md) - Original plan (847 lines)
+- [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) - Detailed waterfall plan
+- [docs/CHRONICLES.md](docs/CHRONICLES.md) - Design discussions & decision log
 - [docs/copilot-learnings.md](docs/copilot-learnings.md) - Obsidian Copilot analysis (1119 lines)
-- [IMPLEMENTATION.md](IMPLEMENTATION.md) - Detailed waterfall plan
 - [old-ideas/synthesis/CLAUDE.md](old-ideas/synthesis/CLAUDE.md) - Synthesis project guide
 
 ### External Links
@@ -624,9 +626,10 @@ git push -u origin claude/semantic-search-server-<session-id>
 When starting a new development session:
 
 1. ✅ Read this CLAUDE.md file
-2. ✅ Check current phase in IMPLEMENTATION.md
-3. ✅ Review open questions relevant to current phase
-4. ✅ Check git status and ensure on correct branch
+2. ✅ Check current phase in docs/IMPLEMENTATION.md
+3. ✅ Review recent design discussions in docs/CHRONICLES.md
+4. ✅ Review open questions relevant to current phase
+5. ✅ Check git status and ensure on correct branch
 5. ✅ Run any existing tests to establish baseline
 6. ✅ Communicate plan to user before major changes
 7. ✅ Use TodoWrite to track work during session
