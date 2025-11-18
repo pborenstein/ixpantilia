@@ -47,6 +47,42 @@
 
 ---
 
+## Architectural Constraints
+
+These constraints shape how Ixpantilia is built. See [docs/CHRONICLES.md](docs/CHRONICLES.md) Entry 2 for detailed discussion.
+
+### 1. Vault Format Agnostic
+- **Optimized for**: Obsidian vault (markdown, frontmatter, wikilinks)
+- **Must work with**: Plain text files in directories
+- **Test**: Point at folder of .txt files → search should still work
+- **Why**: Future-proof, tool-independent, Synthesis already supports this
+
+### 2. Vector Database Storage
+- **Phase 1 decision**: Store in `.ixpantilia/` within vault
+- **Must be configurable**: Allow index outside vault if needed
+- **Options**: Inside vault, outside vault, user-specified path
+- **Why**: Co-location is simple, but we might need flexibility later
+
+### 3. Obsidian Sync Awareness
+- **Context**: Vault syncs via Obsidian Sync (to mobile)
+- **Index should NOT sync**: Too large, not useful on mobile (yet)
+- **Implementation**: Document how to exclude `.ixpantilia/` from sync
+- **Flexibility**: Keep option open for mobile-side search in future
+
+### 4. Network Model (Tailscale)
+- **Deployment**: Local machine (desktop/laptop), not public internet
+- **Access**: Tailscale VPN creates "fake local network"
+- **Security**: Trust Tailscale network, no auth/HTTPS in Phase 1
+- **Why**: Single-user, encrypted by Tailscale, avoid premature complexity
+
+### 5. Configuration Over Convention
+- **Principle**: "Don't paint ourselves into a corner"
+- **Implementation**: All paths/locations in `config.json`
+- **Flexibility**: Easy to change decisions as we learn
+- **Example**: Index location, Synthesis path, model selection
+
+---
+
 ## Project Structure
 
 ```
@@ -313,6 +349,7 @@ async def index():
 {
   "vault_path": "~/Obsidian/amoxtli",
   "synthesis_path": "~/.obsidian/vaults/main/.tools/synthesis",
+  "index_path": null,
   "default_model": "all-MiniLM-L6-v2",
   "server": {
     "host": "0.0.0.0",
@@ -324,6 +361,11 @@ async def index():
   }
 }
 ```
+
+**Configuration notes**:
+- `index_path`: If `null`, defaults to `.ixpantilia/` inside vault. Can override to store index elsewhere.
+- All paths support `~` expansion
+- See docs/CHRONICLES.md Entry 2 for architectural rationale
 
 ### Testing Approach
 

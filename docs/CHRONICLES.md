@@ -235,6 +235,217 @@ This is **not** a technology hypothesis. It's a **behavioral hypothesis**.
 
 ---
 
+## Entry 2: Architectural Constraints & Deployment Model (2025-11-18)
+
+### The Context
+
+Before implementation begins, we need to establish key architectural constraints that will shape how Ixpantilia is built and deployed. These aren't nice-to-haves—they're fundamental assumptions about the environment.
+
+---
+
+### Constraint 1: Vault Format Agnosticism
+
+**Principle**: Ixpantilia is a neutral backend service.
+
+- **Optimized for**: Obsidian vault structure (markdown files, frontmatter, wikilinks)
+- **Should degrade gracefully to**: Plain text files in directories
+- **Must not require**: Obsidian-specific features to function
+
+**Why This Matters**:
+- Future-proofs against Obsidian abandonment/pivots
+- Allows use with other markdown-based tools (Logseq, Foam, plain text)
+- Synthesis already works with plain markdown—don't add Obsidian dependencies
+
+**Implications**:
+- Don't parse Obsidian config files (`.obsidian/`)
+- Don't assume plugins are available
+- obsidian:// URIs are UI enhancement, not core functionality
+- File discovery should work on any directory tree
+
+**Test**: If I point Ixpantilia at a folder of .txt files, search should still work (even if less optimized).
+
+---
+
+### Constraint 2: Vector Database Location
+
+**Question**: Where should the embedding index/vector DB live?
+
+**Current thinking**: Store with the vault (probably in `.ixpantilia/` or similar)
+
+**Rationale**:
+- Co-location with data (vault moves → index moves)
+- Simpler backup story (vault backup includes index)
+- Clear ownership (index belongs to vault, not server)
+- Allows multiple vaults with separate indices
+
+**BUT** (important flexibility):
+- We don't know yet if this is best
+- Index might be large (test in Phase 0)
+- Might want to exclude from Obsidian Sync (see next section)
+- **Don't paint ourselves into a corner**
+
+**Decision for Phase 1**: Store index with vault in `.ixpantilia/` directory, but make path configurable in `config.json` so we can move it later if needed.
+
+---
+
+### Constraint 3: Obsidian Sync Considerations
+
+**Current setup**:
+- Main vault lives on local machine (desktop/laptop)
+- Uses Obsidian Sync to sync to mobile devices (iOS/Android)
+- Currently only syncing to mobile (read-mostly access)
+
+**Problem**: Should the vector DB sync via Obsidian Sync?
+
+**Probably not**, because:
+- Index could be large (hundreds of MB for 2000+ files)
+- Mobile devices don't run Ixpantilia server (yet?)
+- Wasted bandwidth syncing binary index files
+- Index format might be platform-specific
+
+**But maybe yes**, if:
+- We eventually run Ixpantilia on mobile (future possibility?)
+- Index is small enough (need to measure)
+- Having local index enables offline search on mobile
+
+**Decision for Phase 1**:
+- Store index in `.ixpantilia/` directory within vault
+- Document how to exclude from Obsidian Sync (`.obsidian/sync-config.json` or similar)
+- Keep the option open to change this later
+
+**Don't paint ourselves into a corner**: Make index location configurable. Allow index to live either:
+1. Inside vault (`.ixpantilia/`)
+2. Outside vault (e.g., `~/.local/share/ixpantilia/<vault-name>/`)
+3. Wherever user specifies in config
+
+**Actual Obsidian Sync exclusion**: Add `.ixpantilia/` to the vault's `.gitignore` equivalent for Obsidian Sync. (Obsidian Sync has its own exclusion patterns—document this in setup guide.)
+
+---
+
+### Constraint 4: Network Architecture
+
+**Assumption**: We're running on a local machine behind NAT, not internet-accessible.
+
+**Current setup**:
+- Ixpantilia server runs on desktop/laptop (local network)
+- NOT exposed to public internet (no port forwarding, no VPS)
+- Using **Tailscale** to create "fake local network" across devices
+- Very naive Tailscale usage (no special config, just "everything on same VPN")
+
+**Why Tailscale**:
+- Devices appear to be on same local network (100.x.x.x addresses)
+- Mobile can access desktop as if on WiFi (e.g., `http://100.85.23.42:8080`)
+- Encrypted by default (Wireguard under the hood)
+- No certificates, no DNS, no SSL complexity (for now)
+
+**What this means for Ixpantilia**:
+- No authentication needed initially (Tailscale network is trusted)
+- No HTTPS required (Tailscale encrypts transport)
+- Simple `http://` endpoints are fine
+- Focus on speed, not security theater
+
+**Future considerations** (out of scope for Phase 1):
+- Multi-user access (if family/team wants to use)
+- API keys (if exposing beyond Tailscale network)
+- Rate limiting (if needed to prevent abuse)
+- HTTPS (if Tailscale isn't sufficient)
+
+**For now**: Design for single-user, trusted network. Don't over-engineer security.
+
+---
+
+### Constraint 5: Flexibility Over Optimization
+
+**Meta-principle**: Don't paint ourselves into a corner.
+
+Throughout these decisions, the theme is: **Make it work, keep it simple, leave options open.**
+
+**Specific examples**:
+- Index location is configurable (can move later)
+- Vault format agnostic (can use with non-Obsidian tools)
+- No hard-coded paths (use config file)
+- No assumptions about Synthesis location (could swap for other search engine)
+
+**Why this matters**:
+- We're in Phase 0 (don't know what we don't know)
+- Requirements will change as we use it
+- Over-optimization now = regret later
+
+**The old-gleanings lesson**: Rigid structure (15 categories, complex state) killed adoption. Ixpantilia stays flexible.
+
+---
+
+## Decision Log (Continued)
+
+### DEC-004: Vault Format Agnosticism
+
+**Date**: 2025-11-18
+**Decision**: Optimize for Obsidian but support plain text files
+**Rationale**:
+- Future-proofs against tool changes
+- Synthesis already works with any markdown
+- Obsidian-specific features are UI enhancements, not core functionality
+**Trade-offs**: May not leverage all Obsidian features (graph view, plugins, etc.)
+**Test**: Point Ixpantilia at a directory of .txt files—search should work
+
+---
+
+### DEC-005: Vector Database Storage Location
+
+**Date**: 2025-11-18
+**Decision**: Store in `.ixpantilia/` within vault, but make path configurable
+**Rationale**:
+- Co-location with data (vault moves → index moves)
+- Simpler backup story
+- Allows multiple vaults with separate indices
+- Configuration allows flexibility to change later
+**Trade-offs**: May need to exclude from Obsidian Sync (requires user config)
+**Re-evaluate if**: Index size becomes problematic, or we want cross-vault search
+
+---
+
+### DEC-006: Obsidian Sync Exclusion
+
+**Date**: 2025-11-18
+**Decision**: Document how to exclude `.ixpantilia/` from Obsidian Sync, but keep option open
+**Rationale**:
+- Index could be large (hundreds of MB)
+- Mobile doesn't run server (yet)
+- Wasted bandwidth for binary files
+- But maybe useful if we run search on mobile in future
+**Trade-offs**: Users must manually configure sync exclusion
+**Re-evaluate if**: We build mobile-native search, or index is tiny
+
+---
+
+### DEC-007: Network Security Model
+
+**Date**: 2025-11-18
+**Decision**: Trust Tailscale network, no auth/HTTPS in Phase 1
+**Rationale**:
+- Single-user use case
+- Tailscale already provides encryption and access control
+- Premature security complexity slows development
+- Can add auth later if multi-user needed
+**Trade-offs**: Not suitable for public internet exposure (but that's not the use case)
+**Re-evaluate if**: Multi-user access needed, or exposing beyond Tailscale
+
+---
+
+### DEC-008: Configuration Over Convention
+
+**Date**: 2025-11-18
+**Decision**: Make paths/locations configurable, avoid hard-coded assumptions
+**Rationale**:
+- We don't know optimal setup yet
+- Different users have different needs
+- Easy to change via config.json
+- "Don't paint ourselves into a corner"
+**Trade-offs**: Slightly more complex config file
+**Implementation**: All paths in `config.json`, expanded at runtime
+
+---
+
 ## Future Topics to Chronicle
 
 Questions to answer in future entries:
