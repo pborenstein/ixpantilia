@@ -10,19 +10,32 @@ This directory contains test scripts for Phase 0: Discovery & Validation.
 
 1. **Pull the latest changes** from this repo on your machine (with internet)
 
-2. **Update the script path** if needed:
-   - Edit `test_synthesis_performance.py`
-   - Change `SYNTHESIS_PATH` to point to your actual Synthesis installation
-   - Could be: `old-ideas/synthesis/` (in this repo)
-   - Or: `~/.obsidian/vaults/main/.tools/synthesis` (in your vault)
-
-3. **Run the test**:
+2. **Configure Synthesis to use your vault**:
    ```bash
    cd /path/to/ixpantilia
+   python prototypes/setup_vault.py ~/Obsidian/toy-vault
+   ```
+
+   This updates `old-ideas/synthesis/synthesis_config.json` to point at your vault.
+
+3. **Process the vault** (create embeddings - may take a few minutes):
+   ```bash
+   cd old-ideas/synthesis
+   uv run main.py process
+   ```
+
+   This will:
+   - Download the model (all-MiniLM-L6-v2, ~80-90MB) on first run
+   - Index all markdown files in your vault
+   - Create embeddings in the `embeddings/` directory
+
+4. **Run the performance test**:
+   ```bash
+   cd ../..  # back to ixpantilia root
    python prototypes/test_synthesis_performance.py
    ```
 
-4. **Copy the output** and report back via commit message, issue, or however we're communicating
+5. **Copy the output** and report back via commit message, issue, or however we're communicating
 
 ### What the Script Tests
 
@@ -77,16 +90,17 @@ This will help identify WHERE the time is being spent:
 - Python startup time?
 - Synthesis search itself?
 
-#### Option B: Test Real Vault
+#### Option B: Test Your Vault Directly
 
-The initial test used `test-vault` (13 files). Test against your real vault:
+You can also test Synthesis directly from its directory:
 
 ```bash
-cd ~/.obsidian/vaults/main/.tools/synthesis  # or wherever your real Synthesis is
+cd old-ideas/synthesis
 time uv run main.py search "semantic search" --json
 ```
 
-Compare timing to the test-vault results.
+This bypasses the subprocess and lets you measure Synthesis performance directly.
+Compare timing to the subprocess results from the performance test.
 
 #### Option C: Both (Best)
 
