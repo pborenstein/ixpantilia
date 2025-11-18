@@ -78,8 +78,6 @@ def test_search_performance():
     else:
         print(f"ERROR: {stderr}")
 
-    return elapsed
-
 
 def test_stats():
     """Get vault statistics from Synthesis."""
