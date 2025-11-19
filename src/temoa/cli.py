@@ -219,7 +219,7 @@ def stats(output_json):
 
             # Check if embeddings exist
             total_files = statistics.get('total_files', 0)
-            total_embeddings = statistics.get('total_embeddings', 0)
+            total_embeddings = statistics.get('num_embeddings', 0)  # Synthesis uses 'num_embeddings'
             has_error = 'error' in statistics
 
             if has_error or total_files == 0:
@@ -231,7 +231,8 @@ def stats(output_json):
                 click.echo(f"Embeddings generated: {click.style('0', fg='red')}")
                 click.echo("\nRun 'temoa index' to generate embeddings for your vault.")
             else:
-                click.echo(f"Model: {click.style(statistics.get('model', 'Unknown'), fg='green')}")
+                model_name = statistics.get('model_info', {}).get('model_name', 'Unknown')
+                click.echo(f"Model: {click.style(model_name, fg='green')}")
                 click.echo(f"Files indexed: {click.style(str(total_files), fg='yellow')}")
                 click.echo(f"Embeddings: {click.style(str(total_embeddings), fg='green')}")
 
