@@ -232,9 +232,21 @@ class GleaningsExtractor:
         """Extract all gleanings from daily notes."""
         output_dir = self.vault_path / "L" / "Gleanings"
 
+        # In full mode, clear existing state to start fresh
+        if not incremental and not dry_run:
+            print("Full mode: Clearing existing extraction state")
+            self.state = {
+                "version": "1.0",
+                "created_at": datetime.now().isoformat(),
+                "last_run": None,
+                "extracted_gleanings": {},
+                "processed_files": []
+            }
+            print()
+
         print(f"Vault path: {self.vault_path}")
         print(f"Output directory: {output_dir.relative_to(self.vault_path)}")
-        print(f"Mode: {'Incremental' if incremental else 'Full'}")
+        print(f"Mode: {'Incremental' if incremental else 'Full (starting fresh)'}")
         print(f"Dry run: {dry_run}")
         print()
 
@@ -256,7 +268,7 @@ class GleaningsExtractor:
             for gleaning in gleanings:
                 total_gleanings += 1
 
-                # Check for duplicates
+                # Check for duplicates (only in incremental mode or dry-run)
                 if gleaning.gleaning_id in self.state["extracted_gleanings"]:
                     duplicate_gleanings += 1
                     print(f"  - DUPLICATE: {gleaning.title[:60]}... (ID: {gleaning.gleaning_id})")
