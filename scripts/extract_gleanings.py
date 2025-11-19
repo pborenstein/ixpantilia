@@ -82,9 +82,11 @@ Gleaned from [[{Path(self.source_file).stem}]] on {self.date}
 class GleaningsExtractor:
     """Extracts gleanings from daily notes."""
 
-    # Regex to match gleanings: - [Title](URL) - Description
-    GLEANING_PATTERN = re.compile(
-        r'^-\s+\[([^\]]+)\]\(([^)]+)\)\s*-\s*(.+)$',
+    # Regex to match gleanings: - [Title](URL)  [HH:MM]
+    # Format: - [Title](URL) optionally followed by timestamp
+    # Description may be on next line starting with >
+    GLEANING_LINK_PATTERN = re.compile(
+        r'^-\s+\[([^\]]+)\]\(([^)]+)\)',
         re.MULTILINE
     )
 
@@ -179,21 +181,36 @@ class GleaningsExtractor:
         # Extract date from frontmatter or filename
         date = self._extract_date(note_path, content)
 
+        # Split section into lines for easier processing
+        lines = section_content.split('\n')
+
         # Find all gleanings in section
-        for match in self.GLEANING_PATTERN.finditer(section_content):
-            title = match.group(1).strip()
-            url = match.group(2).strip()
-            description = match.group(3).strip()
+        i = 0
+        while i < len(lines):
+            line = lines[i]
+            match = self.GLEANING_LINK_PATTERN.match(line)
 
-            gleaning = Gleaning(
-                title=title,
-                url=url,
-                description=description,
-                date=date,
-                source_file=str(note_path.relative_to(self.vault_path))
-            )
+            if match:
+                title = match.group(1).strip()
+                url = match.group(2).strip()
 
-            gleanings.append(gleaning)
+                # Check next line for description (starts with >)
+                description = ""
+                if i + 1 < len(lines) and lines[i + 1].strip().startswith('>'):
+                    # Extract description, removing leading > and whitespace
+                    description = lines[i + 1].strip()[1:].strip()
+
+                gleaning = Gleaning(
+                    title=title,
+                    url=url,
+                    description=description,
+                    date=date,
+                    source_file=str(note_path.relative_to(self.vault_path))
+                )
+
+                gleanings.append(gleaning)
+
+            i += 1
 
         return gleanings
 
@@ -232,9 +249,21 @@ class GleaningsExtractor:
         """Extract all gleanings from daily notes."""
         output_dir = self.vault_path / "L" / "Gleanings"
 
+        # In full mode, clear existing state to start fresh
+        if not incremental and not dry_run:
+            print("Full mode: Clearing existing extraction state")
+            self.state = {
+                "version": "1.0",
+                "created_at": datetime.now().isoformat(),
+                "last_run": None,
+                "extracted_gleanings": {},
+                "processed_files": []
+            }
+            print()
+
         print(f"Vault path: {self.vault_path}")
         print(f"Output directory: {output_dir.relative_to(self.vault_path)}")
-        print(f"Mode: {'Incremental' if incremental else 'Full'}")
+        print(f"Mode: {'Incremental' if incremental else 'Full (starting fresh)'}")
         print(f"Dry run: {dry_run}")
         print()
 
@@ -256,7 +285,7 @@ class GleaningsExtractor:
             for gleaning in gleanings:
                 total_gleanings += 1
 
-                # Check for duplicates
+                # Check for duplicates (only in incremental mode or dry-run)
                 if gleaning.gleaning_id in self.state["extracted_gleanings"]:
                     duplicate_gleanings += 1
                     print(f"  - DUPLICATE: {gleaning.title[:60]}... (ID: {gleaning.gleaning_id})")
