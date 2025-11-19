@@ -123,6 +123,12 @@ def search(query, limit, model, output_json):
                 click.echo(f"{i}. {click.style(result.get('title', 'Untitled'), fg='green', bold=True)}")
                 click.echo(f"   {result.get('relative_path', 'Unknown path')}")
                 click.echo(f"   Similarity: {result.get('similarity_score', 0):.3f}")
+
+                # Show description/snippet if available
+                if result.get('description'):
+                    desc = result['description'].strip()
+                    click.echo(f"   {click.style(desc, dim=True)}")
+
                 if result.get('tags'):
                     # Convert all tags to strings in case some are integers
                     tags_str = ', '.join(str(tag) for tag in result['tags'])
