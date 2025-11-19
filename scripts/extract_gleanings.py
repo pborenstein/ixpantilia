@@ -95,7 +95,20 @@ class GleaningsExtractor:
     )
 
     def __init__(self, vault_path: Path, state_file: Optional[Path] = None):
-        self.vault_path = Path(vault_path)
+        self.vault_path = Path(vault_path).expanduser()
+
+        # Validate vault path exists
+        if not self.vault_path.exists():
+            raise FileNotFoundError(
+                f"Vault path does not exist: {self.vault_path}\n"
+                f"Please check the path and try again."
+            )
+
+        if not self.vault_path.is_dir():
+            raise NotADirectoryError(
+                f"Vault path is not a directory: {self.vault_path}"
+            )
+
         self.state_file = state_file or (self.vault_path / ".temoa" / "extraction_state.json")
         self.state = self._load_state()
 

@@ -19,8 +19,28 @@ class OldGleaningMigrator:
     """Migrates gleanings from old format to new format."""
 
     def __init__(self, vault_path: Path, old_gleanings_file: Path):
-        self.vault_path = Path(vault_path)
-        self.old_gleanings_file = Path(old_gleanings_file)
+        self.vault_path = Path(vault_path).expanduser()
+        self.old_gleanings_file = Path(old_gleanings_file).expanduser()
+
+        # Validate vault path exists
+        if not self.vault_path.exists():
+            raise FileNotFoundError(
+                f"Vault path does not exist: {self.vault_path}\n"
+                f"Please check the path and try again."
+            )
+
+        if not self.vault_path.is_dir():
+            raise NotADirectoryError(
+                f"Vault path is not a directory: {self.vault_path}"
+            )
+
+        # Validate old gleanings file exists
+        if not self.old_gleanings_file.exists():
+            raise FileNotFoundError(
+                f"Old gleanings file does not exist: {self.old_gleanings_file}\n"
+                f"Please check the path and try again."
+            )
+
         self.state_file = self.vault_path / ".temoa" / "extraction_state.json"
         self.state = self._load_state()
 
