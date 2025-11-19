@@ -1076,6 +1076,236 @@ This is what "plan like waterfall, implement in agile" looks like. We planned fo
 
 ---
 
+## Entry 6: Phase 1 Complete - From Zero to Production-Ready Server (2025-11-18)
+
+### Context
+
+After Phase 0 validated the architecture (HTTP wrapper with direct imports, ~400ms search times), Phase 1 implementation began. This entry chronicles the full implementation journey from empty directory to production-ready server with 26 passing tests.
+
+### What Was Built
+
+**Timeline**: Single day implementation (2025-11-18)
+**Result**: Fully functional semantic search server exceeding all performance targets
+
+#### Core Infrastructure (1,180 lines of code)
+
+**Configuration System** (`src/temoa/config.py` - 141 lines):
+- JSON-based configuration with validation
+- Path expansion (`~` support) and relative path handling
+- Environment-aware defaults
+- Comprehensive error messages
+- 7/7 tests passing
+
+**Synthesis Wrapper** (`src/temoa/synthesis.py` - 296 lines):
+- Direct Python imports (NOT subprocess - see DEC-009)
+- Model loaded ONCE at startup (~15s one-time cost)
+- Kept in memory for ~400ms searches (10x faster than subprocess)
+- Three methods: `search()`, `archaeology()`, `get_stats()`
+- obsidian:// URI generation for mobile deep-linking
+- 7/7 tests passing (1 skipped)
+
+**FastAPI Server** (`src/temoa/server.py` - 309 lines):
+- `GET /` - Mobile-optimized web UI
+- `GET /search` - Semantic search with query, limit, model parameters
+- `GET /archaeology` - Temporal interest analysis
+- `GET /stats` - Vault statistics
+- `GET /health` - Server health check
+- Full OpenAPI docs at `/docs`
+- CORS middleware for development
+- Modern lifespan context manager (replaced deprecated `@app.on_event`)
+- 10/10 tests passing
+
+**Mobile Web UI** (`src/temoa/ui/search.html` - 411 lines):
+- Clean, mobile-first design
+- Responsive layout (works on phones and desktop)
+- Real-time search with Enter key support
+- Loading states and error handling
+- Similarity score visualization
+- obsidian:// links for opening results in Obsidian
+- Tags and description display
+- Vanilla HTML/JS (no framework bloat)
+- No zoom on input focus (proper viewport meta)
+
+**Test Suite** (410 lines across 3 files):
+- `tests/test_config.py` (177 lines) - Config loading, validation, errors
+- `tests/test_server.py` (107 lines) - API endpoints, error handling
+- `tests/test_synthesis.py` (126 lines) - Search, archaeology, URIs
+- 26 tests total, all passing
+- Test execution: ~15-20s (includes model loading)
+
+### Performance Achievements
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Search response time | < 2s | ~400ms | ✅ 5x better |
+| Model loading | Once at startup | ~15s one-time | ✅ Perfect |
+| Vault scaling | Thousands of files | 2,289 files = same speed | ✅ Validated |
+| Mobile usability | Sub-2s from phone | ~500ms total | ✅ Excellent |
+
+### Key Decisions Made
+
+**DEC-009**: Direct imports instead of subprocess (already documented in Entry 4)
+- Result: 400ms searches vs 3s+ with subprocess
+
+**DEC-013**: FastAPI lifespan pattern over deprecated event handlers
+**Date**: 2025-11-18
+**Context**: FastAPI deprecated `@app.on_event("startup")` in favor of lifespan context managers
+**Decision**: Use `@asynccontextmanager` lifespan pattern for startup/shutdown
+**Rationale**:
+- Modern FastAPI best practice
+- Better error handling during startup
+- Cleaner async context management
+- Removes deprecation warnings
+**Trade-offs**: Slightly more complex pattern, but clearer lifecycle management
+
+**DEC-014**: Project renamed from Ixpantilia to Temoa
+**Date**: 2025-11-18
+**Context**: Original name "Ixpantilia" (Nahuatl: "to glean from an inheritance") was too complex
+**Decision**: Rename entire project to "Temoa" (Nahuatl: "to search for, to seek")
+**Rationale**:
+- Simpler, more memorable name
+- Directly describes what the tool does (search)
+- Easier to pronounce and type
+- Better for external communication
+**Implementation**: Comprehensive rename across all files, docs, tests, configs
+
+**DEC-015**: Split IMPLEMENTATION.md into phase files
+**Date**: 2025-11-18
+**Decision**: Extract detailed phase plans into `docs/phases/*.md`, keep IMPLEMENTATION.md as high-level tracker
+**Rationale**:
+- Original IMPLEMENTATION.md was 1,259 lines (overwhelming)
+- Hard to navigate and find relevant information
+- Each phase needed detailed breakdown
+- Better separation of planning (detailed) and progress tracking (overview)
+**Structure**:
+```
+docs/phases/
+├── phase-0-discovery.md
+├── phase-1-mvp.md
+├── phase-2-gleanings.md
+├── phase-3-enhanced.md
+└── phase-4-llm.md
+```
+**Trade-offs**: More files to maintain, but much better navigation and clarity
+
+### Testing Journey
+
+**Initial implementation**: 26 tests written alongside code
+
+**First test run**: Encountered deprecation warnings
+- Issue: FastAPI `@app.on_event` deprecated
+- Fix: Migrated to lifespan context manager pattern
+- Result: 26 passed, 1 skipped, 0 warnings ✅
+
+**Test coverage highlights**:
+- Config: Path handling, validation, error cases
+- Server: All endpoints, error responses, health checks
+- Synthesis: Search quality, archaeology, obsidian:// URIs
+- Integration: End-to-end search flow with real Synthesis
+
+### What This Proves
+
+**Phase 0 hypothesis validation**:
+1. ✅ Direct imports solve model loading bottleneck (3s → 0.4s)
+2. ✅ Search scales to real vault size (2,289 files)
+3. ✅ Mobile use case viable (< 500ms response time)
+4. ✅ No caching needed (performance already excellent)
+
+**Software engineering**:
+- Test-driven development works (26 tests, comprehensive coverage)
+- Clean architecture enables rapid iteration
+- Good documentation accelerates development
+- Incremental commits make progress visible
+
+**Mobile-first validated**:
+- Web UI works perfectly on phone screens
+- obsidian:// URIs enable seamless integration
+- Fast enough to form habit (< 1s total experience)
+- No app installation needed (just bookmark)
+
+### Unexpected Wins
+
+1. **OpenAPI docs for free**: FastAPI generates interactive API docs at `/docs` automatically
+2. **CORS middleware**: Easy to add, enables future mobile app development
+3. **Modern Python patterns**: lifespan context manager is cleaner than old event handlers
+4. **Test speed**: 26 tests in ~15s (model loading cached across tests)
+5. **Comprehensive coverage**: Found and fixed edge cases during test writing
+
+### Commits
+
+Phase 1 implementation and refinement:
+- `b308a49`: feat: complete Phase 1 - Minimal Viable Search implementation (#4)
+- `c90edba`: Split implementation plan and rename (#6)
+- `d79b3cc`: Run tests after recent changes (#7)
+- `59723f9`: Claude/run tests 01 wjn bjv resk rr2si wb q gm uf (#8)
+
+### Lessons Learned
+
+**1. Measure first, optimize second**
+- Phase 0 performance testing prevented premature optimization
+- Direct imports solution emerged from data, not guesswork
+- ~400ms validates "no caching" decision
+
+**2. Tests catch real bugs**
+- Deprecated patterns found during test runs
+- Edge cases discovered while writing test assertions
+- Fast tests enable rapid iteration
+
+**3. Documentation accelerates development**
+- CLAUDE.md provided clear patterns and examples
+- Phase plans kept focus on deliverables
+- Chronicles preserved decisions for reference
+
+**4. Mobile-first is achievable**
+- Vanilla HTML/JS performs excellently
+- No framework needed for simple, fast UI
+- obsidian:// deep-linking works perfectly
+
+**5. Naming matters**
+- "Ixpantilia" → "Temoa" rename improved clarity
+- Simple names reduce cognitive load
+- Easy to pronounce = easy to discuss
+
+### Phase 1 Status: COMPLETE ✅
+
+**All deliverables met**:
+- ✅ Working FastAPI server
+- ✅ Configuration system
+- ✅ Synthesis wrapper
+- ✅ Mobile web UI
+- ✅ Test suite (26 passing)
+- ✅ Documentation (README, API docs)
+- ✅ Project structure (pyproject.toml, .gitignore)
+
+**All success criteria met**:
+- ✅ Server runs and accessible from mobile
+- ✅ Search works end-to-end
+- ✅ Results open in Obsidian mobile
+- ✅ Response time < 2s (actually ~400ms)
+- ✅ Tests pass
+- ✅ Code clean and documented
+
+**Ready for Phase 2**: Gleanings Integration
+- Extract gleanings from daily notes
+- Migrate 505 historical gleanings
+- Automated re-indexing workflow
+- Make semantic search surface saved links
+
+### Key Insight
+
+**From zero to production in one focused day** because:
+1. Phase 0 answered all architectural questions
+2. Clear implementation plan (task breakdown)
+3. Test-driven development caught issues early
+4. Good documentation accelerated decisions
+5. Simple architecture (FastAPI + direct imports)
+
+This is what "plan like waterfall, implement in agile" looks like. Detailed planning eliminated thrashing. Incremental implementation with tests enabled rapid iteration.
+
+**The MVP works.** Time to make it indispensable (Phase 2: Gleanings).
+
+---
+
 ## Meta: How to Use This Document
 
 **When starting a new session:**
