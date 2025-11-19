@@ -16,17 +16,21 @@ def main():
 
     \b
     Quick Start:
+      temoa index               # Build index (first time setup)
       temoa server              # Start the FastAPI server
       temoa search "query"      # Quick search from CLI
       temoa stats               # Show vault statistics
-      temoa extract             # Extract gleanings from daily notes
 
     \b
     Common Workflows:
+      # First time setup
+      temoa config              # Check configuration
+      temoa index               # Build embedding index
+
       # Start server for mobile access
       temoa server
 
-      # Extract new gleanings and re-index
+      # Extract new gleanings and update index
       temoa extract
       temoa reindex
 
@@ -330,12 +334,56 @@ def migrate(vault, json_file, output, dry_run):
 @main.command()
 @click.option('--vault', default=None, type=click.Path(exists=True),
               help='Vault path (default: from config)')
+def index(vault):
+    """Build the embedding index from scratch.
+
+    This processes all files in the vault and creates embeddings.
+    Run this once when you first set up Temoa, or after major vault changes.
+
+    For incremental updates, use 'temoa reindex' instead.
+    """
+    from .config import Config
+    from .synthesis import SynthesisClient
+
+    config = Config()
+    vault_path = Path(vault) if vault else config.vault_path
+
+    click.echo(f"Building index for: {vault_path}")
+    click.echo(click.style("This may take a few minutes for large vaults...", fg='yellow'))
+    click.echo()
+
+    try:
+        client = SynthesisClient(
+            synthesis_path=config.synthesis_path,
+            vault_path=vault_path,
+            model=config.default_model,
+            storage_dir=config.storage_dir
+        )
+
+        with click.progressbar(length=100, label='Indexing') as bar:
+            result = client.reindex(force=True)
+            bar.update(100)
+
+        click.echo(f"\n{click.style('✓', fg='green')} Index built successfully")
+        click.echo(f"Files indexed: {result.get('files_indexed', 'Unknown')}")
+        click.echo(f"Model: {result.get('model', 'Unknown')}")
+
+    except Exception as e:
+        click.echo(f"\nError: {e}", err=True)
+        sys.exit(1)
+
+
+@main.command()
+@click.option('--vault', default=None, type=click.Path(exists=True),
+              help='Vault path (default: from config)')
 @click.option('--force', is_flag=True, help='Force full rebuild of index')
 def reindex(vault, force):
     """Re-index the vault embeddings.
 
-    Triggers Synthesis to rebuild the embedding index for the vault.
-    Use --force to rebuild from scratch (otherwise updates incrementally).
+    Updates the embedding index incrementally (only processes new/changed files).
+    Use --force to rebuild everything from scratch.
+
+    For first-time setup, use 'temoa index' instead.
     """
     from .config import Config
     from .synthesis import SynthesisClient
@@ -358,7 +406,7 @@ def reindex(vault, force):
         with click.progressbar(length=100, label='Re-indexing') as bar:
             # Note: This is a simple progress indicator
             # Real progress would require Synthesis to support callbacks
-            result = client.reindex(force_rebuild=force)
+            result = client.reindex(force=force)
             bar.update(100)
 
         click.echo(f"\n{click.style('✓', fg='green')} Re-indexing complete")
