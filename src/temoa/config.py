@@ -12,18 +12,74 @@ class ConfigError(Exception):
 class Config:
     """Application configuration loaded from config.json"""
 
-    def __init__(self, config_path: Path = Path("config.json")):
+    def __init__(self, config_path: Optional[Path] = None):
         """
         Load configuration from JSON file.
 
+        Searches for config in this order:
+        1. Provided config_path
+        2. ~/.config/temoa/config.json (XDG standard)
+        3. ~/.temoa.json (simple alternative)
+        4. ./config.json (current directory, for development)
+
         Args:
-            config_path: Path to configuration file (default: config.json)
+            config_path: Optional path to configuration file
 
         Raises:
             ConfigError: If config file not found or invalid
         """
-        self.config_path = config_path
+        self.config_path = self._find_config(config_path)
         self._config = self._load_config()
+
+    def _find_config(self, config_path: Optional[Path]) -> Path:
+        """
+        Find configuration file in standard locations.
+
+        Args:
+            config_path: Optional explicit path
+
+        Returns:
+            Path to config file
+
+        Raises:
+            ConfigError: If no config file found
+        """
+        # If explicit path provided, use it
+        if config_path:
+            if config_path.exists():
+                return config_path
+            raise ConfigError(f"Specified config file not found: {config_path}")
+
+        # Search standard locations
+        search_paths = [
+            Path.home() / ".config" / "temoa" / "config.json",  # XDG standard
+            Path.home() / ".temoa.json",                         # Simple alternative
+            Path("config.json"),                                 # Current directory (dev)
+        ]
+
+        for path in search_paths:
+            if path.exists():
+                return path
+
+        # No config found - provide helpful error
+        raise ConfigError(
+            "No config file found. Create one in any of these locations:\n\n"
+            "  1. ~/.config/temoa/config.json (recommended)\n"
+            "  2. ~/.temoa.json\n"
+            "  3. ./config.json (current directory)\n\n"
+            "Quick setup:\n"
+            "  mkdir -p ~/.config/temoa\n"
+            "  cat > ~/.config/temoa/config.json << 'EOF'\n"
+            "{\n"
+            '  "vault_path": "~/Obsidian/your-vault",\n'
+            '  "synthesis_path": "~/projects/temoa/old-ideas/synthesis",\n'
+            '  "index_path": null,\n'
+            '  "default_model": "all-MiniLM-L6-v2",\n'
+            '  "server": {"host": "0.0.0.0", "port": 8080},\n'
+            '  "search": {"default_limit": 10, "max_limit": 50, "timeout": 10}\n'
+            "}\n"
+            "EOF\n"
+        )
 
     def _load_config(self) -> Dict[str, Any]:
         """
@@ -35,13 +91,9 @@ class Config:
         Raises:
             ConfigError: If config file not found or invalid JSON
         """
+        # config_path should already exist (found by _find_config)
         if not self.config_path.exists():
-            raise ConfigError(
-                f"Config file not found: {self.config_path}\n\n"
-                f"Please copy config.example.json to config.json and update paths:\n"
-                f"  cp config.example.json config.json\n"
-                f"  # Edit config.json with your vault and synthesis paths"
-            )
+            raise ConfigError(f"Config file disappeared: {self.config_path}")
 
         try:
             with open(self.config_path) as f:
