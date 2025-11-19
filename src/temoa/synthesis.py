@@ -274,9 +274,18 @@ class SynthesisClient:
             SynthesisError: If stats retrieval fails
         """
         try:
+            logger.info(f"Getting stats from storage_dir: {self.storage_dir}")
             stats = self.pipeline.get_stats()
 
             if not stats:
+                logger.warning(f"No stats returned from pipeline. Checking if files exist...")
+                logger.warning(f"Storage directory: {self.storage_dir}")
+                logger.warning(f"Directory exists: {self.storage_dir.exists()}")
+                if self.storage_dir.exists():
+                    import os
+                    files = os.listdir(self.storage_dir)
+                    logger.warning(f"Files in storage_dir: {files}")
+
                 return {
                     "file_count": 0,
                     "model_info": {"model_name": self.model_name},

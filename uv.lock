@@ -1373,6 +1373,7 @@ name = "temoa"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "click" },
     { name = "fastapi" },
     { name = "numpy" },
     { name = "pyyaml" },
@@ -1394,6 +1395,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
+    { name = "click", specifier = ">=8.0" },
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.25.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.6.0" },
