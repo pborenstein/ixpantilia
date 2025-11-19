@@ -104,6 +104,11 @@ class Config:
         return self._config["index_path"]
 
     @property
+    def storage_dir(self) -> Optional[Path]:
+        """Alias for index_path (for compatibility with Synthesis)"""
+        return self.index_path
+
+    @property
     def default_model(self) -> str:
         """Default sentence-transformer model"""
         return self._config["default_model"]
