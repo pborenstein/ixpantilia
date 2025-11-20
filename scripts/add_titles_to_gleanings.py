@@ -7,6 +7,7 @@ so Synthesis can display proper titles instead of MD5 hash filenames.
 """
 
 import argparse
+import json
 import re
 from pathlib import Path
 
@@ -41,8 +42,11 @@ def add_title_to_frontmatter(content: str, title: str) -> str:
     closing = frontmatter_match.group(3)
     rest_of_content = content[frontmatter_match.end():]
 
+    # Quote title for YAML safety (handles colons, quotes, etc.)
+    quoted_title = json.dumps(title)
+
     # Add title as first field in frontmatter
-    new_frontmatter = f"title: {title}\n{frontmatter}"
+    new_frontmatter = f"title: {quoted_title}\n{frontmatter}"
 
     return opening + new_frontmatter + closing + rest_of_content
 

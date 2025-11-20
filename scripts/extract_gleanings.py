@@ -57,8 +57,11 @@ class Gleaning:
 
     def to_markdown(self) -> str:
         """Convert to markdown note format."""
+        # Quote title for YAML safety (handles colons, quotes, etc.)
+        quoted_title = json.dumps(self.title)
+
         return f"""---
-title: {self.title}
+title: {quoted_title}
 url: {self.url}
 domain: {self.domain}
 date: {self.date}
