@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Optional
 
-GleaningStatus = Literal["active", "inactive"]
+GleaningStatus = Literal["active", "inactive", "hidden"]
 
 
 class GleaningStatusManager:
@@ -207,7 +207,7 @@ def parse_frontmatter_status(content: str) -> Optional[GleaningStatus]:
     for line in frontmatter.split("\n"):
         if line.startswith("status:"):
             status = line.split(":", 1)[1].strip()
-            if status in ("active", "inactive"):
+            if status in ("active", "inactive", "hidden"):
                 return status
 
     return None

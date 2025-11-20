@@ -54,7 +54,9 @@ class GleaningMaintainer:
             "descriptions_added": 0,
             "descriptions_skipped": 0,
             "marked_inactive": 0,
-            "reasons_added": 0
+            "reasons_added": 0,
+            "restored_active": 0,
+            "skipped_hidden": 0
         }
 
     def check_url(self, url: str) -> Tuple[bool, Optional[str], Optional[int]]:
@@ -265,6 +267,12 @@ class GleaningMaintainer:
             title = frontmatter_dict.get("title", "Untitled")
             current_status = frontmatter_dict.get("status", "active")
 
+            # Skip hidden gleanings entirely
+            if current_status == "hidden":
+                print(f"  Skipping (hidden): {title}")
+                self.stats["skipped_hidden"] += 1
+                return result
+
             updates = {}
 
             # Check if already inactive but missing reason
@@ -288,9 +296,19 @@ class GleaningMaintainer:
                     print(f"    ✓ Link alive ({status_code})")
                     self.stats["alive"] += 1
 
-                    # If was marked inactive but link is now alive, note it but keep inactive
+                    # If was marked inactive but link is now alive, restore to active
                     if already_inactive:
-                        print(f"    ⚠ Link alive but previously marked inactive (keeping inactive)")
+                        reason_text = f"Link restored (was inactive, now alive as of check)"
+                        updates["status"] = "active"
+                        updates["reason"] = reason_text
+                        if not dry_run:
+                            self.status_manager.mark_status(
+                                gleaning_id,
+                                "active",
+                                reason_text
+                            )
+                        self.stats["restored_active"] += 1
+                        print(f"    → Restored to active (link came back)")
 
                     # Fetch description if missing
                     if add_descriptions and not description:
@@ -435,7 +453,9 @@ class GleaningMaintainer:
         print(f"Descriptions added: {self.stats['descriptions_added']}")
         print(f"Descriptions skipped: {self.stats['descriptions_skipped']}")
         print(f"Marked inactive: {self.stats['marked_inactive']}")
+        print(f"Restored to active: {self.stats['restored_active']}")
         print(f"Reasons added (backfill): {self.stats['reasons_added']}")
+        print(f"Skipped (hidden): {self.stats['skipped_hidden']}")
         print("=" * 60)
 
 

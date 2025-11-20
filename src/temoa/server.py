@@ -79,7 +79,7 @@ async def lifespan(app: FastAPI):
 
 def filter_inactive_gleanings(results: list) -> list:
     """
-    Filter out inactive gleanings from search results.
+    Filter out inactive and hidden gleanings from search results.
 
     Args:
         results: List of search result dicts
@@ -107,9 +107,9 @@ def filter_inactive_gleanings(results: list) -> list:
             # If no status found or status is active, include result
             if status is None or status == "active":
                 filtered.append(result)
-            # If status is inactive, skip this result
-            elif status == "inactive":
-                logger.debug(f"Filtered out inactive gleaning: {result.get('title', 'Unknown')}")
+            # If status is inactive or hidden, skip this result
+            elif status in ("inactive", "hidden"):
+                logger.debug(f"Filtered out {status} gleaning: {result.get('title', 'Unknown')}")
                 continue
 
         except Exception as e:
