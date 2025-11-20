@@ -74,7 +74,7 @@ class Config:
             '  "vault_path": "~/Obsidian/your-vault",\n'
             '  "synthesis_path": "~/projects/temoa/old-ideas/synthesis",\n'
             '  "index_path": null,\n'
-            '  "default_model": "all-MiniLM-L6-v2",\n'
+            '  "default_model": "all-mpnet-base-v2",\n'
             '  "server": {"host": "0.0.0.0", "port": 8080},\n'
             '  "search": {"default_limit": 10, "max_limit": 50, "timeout": 10}\n'
             "}\n"

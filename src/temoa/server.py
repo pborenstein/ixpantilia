@@ -175,6 +175,12 @@ async def search(
         ge=1,
         le=100
     ),
+    min_score: Optional[float] = Query(
+        default=0.3,
+        description="Minimum similarity score (0.0-1.0, default 0.3)",
+        ge=0.0,
+        le=1.0
+    ),
     model: Optional[str] = Query(
         default=None,
         description="Embedding model to use (optional)"
@@ -216,7 +222,7 @@ async def search(
         limit = config.search_max_limit
 
     try:
-        logger.info(f"Search: query='{q}', limit={limit}, model={model or 'default'}")
+        logger.info(f"Search: query='{q}', limit={limit}, min_score={min_score}, model={model or 'default'}")
 
         # Note: model parameter not supported yet in current wrapper
         # Would require reinitializing Synthesis with different model
@@ -230,19 +236,38 @@ async def search(
                 }
             )
 
-        # Perform search
-        data = synthesis.search(query=q, limit=limit)
+        # Perform search (request more results to account for filtering)
+        search_limit = limit * 2 if limit else 50
+        data = synthesis.search(query=q, limit=search_limit)
+
+        # Filter by similarity score first
+        results = data.get("results", [])
+        score_filtered = [r for r in results if r.get("similarity_score", 0) >= min_score]
+
+        score_removed = len(results) - len(score_filtered)
+        if score_removed > 0:
+            logger.info(f"Filtered {score_removed} results below min_score={min_score}")
 
         # Filter out inactive gleanings
-        original_count = len(data.get("results", []))
-        data["results"] = filter_inactive_gleanings(data.get("results", []))
-        filtered_count = len(data["results"])
+        original_count = len(score_filtered)
+        filtered_results = filter_inactive_gleanings(score_filtered)
+        status_removed = original_count - len(filtered_results)
 
-        if filtered_count < original_count:
-            logger.info(f"Filtered {original_count - filtered_count} inactive gleanings from results")
+        if status_removed > 0:
+            logger.info(f"Filtered {status_removed} inactive gleanings from results")
 
-        # Update total count
-        data["total"] = filtered_count
+        # Apply final limit
+        filtered_results = filtered_results[:limit] if limit else filtered_results
+
+        # Update response
+        data["results"] = filtered_results
+        data["total"] = len(filtered_results)
+        data["min_score"] = min_score
+        data["filtered_count"] = {
+            "by_score": score_removed,
+            "by_status": status_removed,
+            "total_removed": score_removed + status_removed
+        }
 
         return JSONResponse(content=data)
 

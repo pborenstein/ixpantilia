@@ -81,16 +81,18 @@ def server(host, port, reload, log_level):
 @main.command()
 @click.argument('query')
 @click.option('--limit', '-n', default=10, type=int, help='Number of results (default: 10)')
+@click.option('--min-score', '-s', default=0.3, type=float, help='Minimum similarity score (0.0-1.0, default: 0.3)')
 @click.option('--model', '-m', default=None, help='Embedding model to use')
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-def search(query, limit, model, output_json):
+def search(query, limit, min_score, model, output_json):
     """Search the vault for similar content.
 
     \b
     Examples:
       temoa search "semantic search"
       temoa search "tailscale networking" --limit 5
-      temoa search "AI tools" --json
+      temoa search "AI tools" --min-score 0.5
+      temoa search "obsidian" --json
     """
     from .config import Config
     from .synthesis import SynthesisClient
@@ -105,8 +107,23 @@ def search(query, limit, model, output_json):
             storage_dir=config.storage_dir
         )
 
-        result_data = client.search(query, limit=limit)
+        # Request more results to account for filtering
+        search_limit = limit * 2 if limit else 50
+        result_data = client.search(query, limit=search_limit)
         results = result_data.get('results', [])
+
+        # Filter by minimum similarity score
+        filtered_results = [r for r in results if r.get('similarity_score', 0) >= min_score]
+
+        # Apply final limit
+        filtered_results = filtered_results[:limit]
+
+        # Update result data
+        result_data['results'] = filtered_results
+        result_data['total'] = len(filtered_results)
+        result_data['min_score'] = min_score
+
+        results = filtered_results
 
         if output_json:
             # Output as JSON for scripting
