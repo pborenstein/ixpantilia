@@ -1,4 +1,5 @@
 ---
+title: Tailscale for Personal Projects
 gleaned: 2025-11-16
 url: https://tailscale.com/blog/how-tailscale-works/
 tags: [gleaning, networking, tailscale]

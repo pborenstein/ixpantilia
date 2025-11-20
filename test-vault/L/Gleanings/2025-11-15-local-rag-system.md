@@ -1,4 +1,5 @@
 ---
+title: Building a Local RAG System
 gleaned: 2025-11-15
 url: https://news.ycombinator.com/item?id=38309611
 tags: [gleaning, rag, privacy]

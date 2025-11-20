@@ -58,6 +58,7 @@ class Gleaning:
     def to_markdown(self) -> str:
         """Convert to markdown note format."""
         return f"""---
+title: {self.title}
 url: {self.url}
 domain: {self.domain}
 date: {self.date}
