@@ -1,5 +1,6 @@
 """FastAPI server for Temoa semantic search"""
 import logging
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -17,6 +18,18 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Import extraction functionality
+# Add scripts directory to path so we can import extract_gleanings
+scripts_path = Path(__file__).parent.parent.parent / "scripts"
+if str(scripts_path) not in sys.path:
+    sys.path.insert(0, str(scripts_path))
+
+try:
+    from extract_gleanings import GleaningsExtractor
+except ImportError as e:
+    logger.warning(f"Could not import GleaningsExtractor: {e}")
+    GleaningsExtractor = None
 
 # Load configuration
 try:
@@ -356,6 +369,138 @@ async def reindex(
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
+        )
+
+
+@app.post("/extract")
+async def extract_gleanings(
+    incremental: bool = Query(
+        default=True,
+        description="Incremental mode (only new files) or full re-extraction"
+    ),
+    auto_reindex: bool = Query(
+        default=True,
+        description="Automatically re-index after extraction"
+    )
+):
+    """
+    Extract gleanings from daily notes.
+
+    This scans daily notes for gleanings (links with descriptions) and creates
+    individual gleaning notes in L/Gleanings/.
+
+    Example:
+        POST /extract?incremental=true&auto_reindex=true
+
+    Returns:
+        {
+            "status": "success",
+            "total_gleanings": 10,
+            "new_gleanings": 5,
+            "duplicates_skipped": 5,
+            "files_processed": 3,
+            "reindexed": true
+        }
+    """
+    if GleaningsExtractor is None:
+        raise HTTPException(
+            status_code=500,
+            detail="Gleaning extraction not available (import failed)"
+        )
+
+    try:
+        logger.info(f"Extraction requested (incremental={incremental}, auto_reindex={auto_reindex})")
+
+        # Initialize extractor
+        extractor = GleaningsExtractor(config.vault_path)
+
+        # Find notes to process
+        daily_notes = extractor.find_daily_notes(incremental=incremental)
+
+        if not incremental:
+            # Clear state for full re-extraction
+            extractor.state = {
+                "version": "1.0",
+                "created_at": extractor.state["created_at"],
+                "last_run": None,
+                "extracted_gleanings": {},
+                "processed_files": []
+            }
+
+        output_dir = config.vault_path / "L" / "Gleanings"
+        total_gleanings = 0
+        new_gleanings = 0
+        duplicate_gleanings = 0
+
+        for note_path in daily_notes:
+            gleanings = extractor.extract_from_note(note_path)
+
+            for gleaning in gleanings:
+                total_gleanings += 1
+
+                # Check for duplicates
+                if gleaning.gleaning_id in extractor.state["extracted_gleanings"]:
+                    duplicate_gleanings += 1
+                    logger.debug(f"Duplicate gleaning: {gleaning.title[:60]}...")
+                    continue
+
+                # Create gleaning note
+                extractor.create_gleaning_note(gleaning, output_dir, dry_run=False)
+                new_gleanings += 1
+
+                # Update state
+                extractor.state["extracted_gleanings"][gleaning.gleaning_id] = gleaning.to_dict()
+
+            # Mark file as processed
+            rel_path = str(note_path.relative_to(config.vault_path))
+            if rel_path not in extractor.state["processed_files"]:
+                extractor.state["processed_files"].append(rel_path)
+
+        # Save state
+        extractor._save_state()
+
+        logger.info(
+            f"Extraction complete: {new_gleanings} new, "
+            f"{duplicate_gleanings} duplicates, "
+            f"{len(daily_notes)} files processed"
+        )
+
+        result = {
+            "status": "success",
+            "total_gleanings": total_gleanings,
+            "new_gleanings": new_gleanings,
+            "duplicates_skipped": duplicate_gleanings,
+            "files_processed": len(daily_notes),
+            "message": f"Extracted {new_gleanings} new gleanings from {len(daily_notes)} files"
+        }
+
+        # Auto-reindex if requested and new gleanings were created
+        if auto_reindex and new_gleanings > 0:
+            logger.info("Auto-reindexing after extraction...")
+            try:
+                reindex_result = synthesis.reindex(force=True)
+                result["reindexed"] = True
+                result["files_indexed"] = reindex_result.get("files_indexed", 0)
+            except Exception as e:
+                logger.warning(f"Auto-reindex failed: {e}")
+                result["reindexed"] = False
+                result["reindex_error"] = str(e)
+        else:
+            result["reindexed"] = False
+
+        return JSONResponse(content=result)
+
+    except FileNotFoundError as e:
+        logger.error(f"Extraction error: {e}")
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error during extraction: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Extraction failed: {str(e)}"
         )
 
 
