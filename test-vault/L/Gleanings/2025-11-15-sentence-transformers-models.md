@@ -1,4 +1,5 @@
 ---
+title: Sentence Transformers - Pretrained Models
 gleaned: 2025-11-15
 url: https://www.sbert.net/docs/pretrained_models.html
 tags: [gleaning, ml, embeddings]

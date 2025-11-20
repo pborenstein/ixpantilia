@@ -50,9 +50,8 @@ class Config:
                 return config_path
             raise ConfigError(f"Specified config file not found: {config_path}")
 
-        # Search standard locations
+        # Search standard locations (global config only - not vault-local)
         search_paths = [
-            Path(".temoa") / "config.json",                      # Vault-local config (if in vault)
             Path.home() / ".config" / "temoa" / "config.json",  # XDG standard
             Path.home() / ".temoa.json",                         # Simple alternative
             Path("config.json"),                                 # Current directory (dev)
@@ -65,15 +64,14 @@ class Config:
         # No config found - provide helpful error
         raise ConfigError(
             "No config file found. Create one in any of these locations:\n\n"
-            "  1. .temoa/config.json (in vault directory - recommended)\n"
-            "  2. ~/.config/temoa/config.json (global config)\n"
-            "  3. ~/.temoa.json (simple alternative)\n"
-            "  4. ./config.json (current directory)\n\n"
-            "Quick setup (run from vault directory):\n"
-            "  mkdir -p .temoa\n"
-            "  cat > .temoa/config.json << 'EOF'\n"
+            "  1. ~/.config/temoa/config.json (recommended - XDG standard)\n"
+            "  2. ~/.temoa.json (simple alternative)\n"
+            "  3. ./config.json (current directory - for development)\n\n"
+            "Quick setup:\n"
+            "  mkdir -p ~/.config/temoa\n"
+            "  cat > ~/.config/temoa/config.json << 'EOF'\n"
             "{\n"
-            '  "vault_path": ".",\n'
+            '  "vault_path": "~/Obsidian/your-vault",\n'
             '  "synthesis_path": "~/projects/temoa/old-ideas/synthesis",\n'
             '  "index_path": null,\n'
             '  "default_model": "all-MiniLM-L6-v2",\n'

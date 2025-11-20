@@ -1,4 +1,5 @@
 ---
+title: FastAPI Best Practices
 gleaned: 2025-11-15
 url: https://github.com/zhanymkanov/fastapi-best-practices
 tags: [gleaning, python, fastapi]

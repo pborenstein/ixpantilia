@@ -351,6 +351,57 @@ This is a **behavioral hypothesis**, not a technical one. It requires:
 - [ ] Friction points document (what prevented usage)
 - [ ] Feature requests based on real needs
 
+### Deployment Shakedown (2025-11-20)
+
+**Status**: IN PROGRESS - Deployment testing revealed and fixed critical bugs
+
+During initial deployment testing, discovered and fixed 4 critical bugs:
+
+**Bug 1: Storage Path Mismatch** (files_indexed: 0)
+- **Problem**: Health endpoint showed `files_indexed: 0` despite 2942 files indexed
+- **Cause**: Server looked in `synthesis/embeddings/` instead of `vault/.temoa/`
+- **Fix**: Pass `storage_dir=config.storage_dir` to SynthesisClient (commit: 7dfbe1c)
+- **Impact**: Health checks now correctly report indexed file count
+
+**Bug 2: Circular Config Dependency**
+- **Problem**: Config search included `.temoa/config.json` (relative to cwd), but config contains vault_path
+- **Cause**: Can't find config without knowing vault location; can't know vault without reading config
+- **Fix**: Removed vault-local search, config is now global-only (commit: 35947f1)
+- **Impact**: Can run temoa commands from any directory
+
+**Bug 3: Gleaning Titles as MD5 Hashes**
+- **Problem**: Search results showed "e1471cc011dc" instead of actual titles
+- **Cause**: Gleanings missing `title:` in frontmatter, Synthesis fell back to filename
+- **Fix**: Updated extraction scripts to add `title:` field, created repair script (commit: a1daadd)
+- **Impact**: Better search UX - can identify gleanings by title
+
+**Bug 4: YAML Parsing Errors**
+- **Problem**: `mapping values are not allowed here` for titles with colons
+- **Cause**: Unquoted title values like "obsidian-sanctum: A theme" broke YAML parsing
+- **Fix**: Quote title values with `json.dumps()` to handle special characters (commit: aeb0edf)
+- **Impact**: All gleaning titles parse correctly, no YAML errors
+
+**Enhancement: /extract API Endpoint**
+- **Added**: `POST /extract` endpoint for gleaning extraction via API (commit: c13e431)
+- **Features**:
+  - `incremental=true` (default): Only process new files
+  - `auto_reindex=true` (default): Auto-reindex after extraction
+- **Impact**: Can trigger extraction from web UI or automation without CLI
+
+**Commits in this session:**
+- 7dfbe1c: fix: pass storage_dir to SynthesisClient
+- 35947f1: fix: remove vault-local config search
+- a1daadd: fix: add title field to gleaning frontmatter
+- aeb0edf: fix: quote title values for YAML safety
+- c13e431: feat: add /extract endpoint
+
+**Updated Deliverables:**
+- [x] Fixed storage path configuration
+- [x] Simplified config search (global-only)
+- [x] Gleaning titles display properly
+- [x] `/extract` API endpoint added
+- [x] `scripts/add_titles_to_gleanings.py` - Repair tool for existing gleanings
+
 ### Success Criteria
 
 **Deployment Working:**

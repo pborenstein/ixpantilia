@@ -1,4 +1,5 @@
 ---
+title: Why SQLite Works for Local-First Apps
 gleaned: 2025-11-16
 url: https://www.sqlite.org/whentouse.html
 tags: [gleaning, databases, sqlite]
