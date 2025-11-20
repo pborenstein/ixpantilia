@@ -67,6 +67,9 @@ class Gleaning:
         # Quote title for YAML safety (handles colons, quotes, etc.)
         quoted_title = json.dumps(self.title)
 
+        # Quote description for YAML safety
+        quoted_description = json.dumps(self.description) if self.description else '""'
+
         return f"""---
 title: {quoted_title}
 url: {self.url}
@@ -76,6 +79,7 @@ source: {self.source_file}
 gleaning_id: {self.gleaning_id}
 status: {self.status}
 type: gleaning
+description: {quoted_description}
 ---
 
 # {self.title}

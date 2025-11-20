@@ -58,6 +58,7 @@ source: Daily/2025-11-20.md
 gleaning_id: abc123def456
 status: inactive
 type: gleaning
+description: "A brief description of this link and why it matters"
 ---
 ```
 

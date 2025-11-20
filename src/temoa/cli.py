@@ -605,6 +605,69 @@ def gleaning_show(gleaning_id, json_output):
         sys.exit(1)
 
 
+@gleaning.command(name="maintain")
+@click.option('--check-links/--no-check-links', default=True,
+              help='Check if URLs are alive (default: true)')
+@click.option('--add-descriptions/--no-add-descriptions', default=True,
+              help='Fetch meta descriptions for missing ones (default: true)')
+@click.option('--mark-dead-inactive/--no-mark-dead-inactive', default=True,
+              help='Mark dead links as inactive (default: true)')
+@click.option('--dry-run', is_flag=True, help='Preview changes without applying them')
+@click.option('--timeout', type=int, default=10, help='HTTP request timeout in seconds (default: 10)')
+@click.option('--rate-limit', type=float, default=1.0, help='Seconds between requests (default: 1.0)')
+def gleaning_maintain(check_links, add_descriptions, mark_dead_inactive, dry_run, timeout, rate_limit):
+    """Maintain gleanings (check links, add descriptions).
+
+    This command:
+    - Checks if gleaning URLs are still alive
+    - Fetches meta descriptions from live URLs if missing
+    - Marks dead links as inactive
+    - Updates frontmatter with new data
+
+    \b
+    Examples:
+      temoa gleaning maintain --dry-run
+      temoa gleaning maintain
+      temoa gleaning maintain --no-mark-dead-inactive
+      temoa gleaning maintain --rate-limit 2.0
+    """
+    from .config import Config
+
+    # Import the maintainer from scripts
+    scripts_path = Path(__file__).parent.parent.parent / "scripts"
+    if str(scripts_path) not in sys.path:
+        sys.path.insert(0, str(scripts_path))
+
+    try:
+        from maintain_gleanings import GleaningMaintainer
+    except ImportError as e:
+        click.echo(f"Error importing maintenance tool: {e}", err=True)
+        sys.exit(1)
+
+    try:
+        cfg = Config()
+
+        maintainer = GleaningMaintainer(
+            vault_path=cfg.vault_path,
+            timeout=timeout
+        )
+
+        maintainer.maintain_all(
+            check_links=check_links,
+            add_descriptions=add_descriptions,
+            mark_dead_inactive=mark_dead_inactive,
+            dry_run=dry_run,
+            rate_limit=rate_limit
+        )
+
+    except KeyboardInterrupt:
+        click.echo("\n\nInterrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 @main.command()
 def config():
     """Show current configuration.
