@@ -350,6 +350,11 @@ class GleaningMaintainer:
         gleaning_files = list(self.gleanings_dir.glob("*.md"))
         self.stats["total"] = len(gleaning_files)
 
+        # Estimate time
+        estimated_time = self.stats["total"] * rate_limit
+        est_minutes = int(estimated_time / 60)
+        est_seconds = int(estimated_time % 60)
+
         print(f"\nMaintaining {self.stats['total']} gleanings")
         print(f"Options:")
         print(f"  Check links: {check_links}")
@@ -357,9 +362,27 @@ class GleaningMaintainer:
         print(f"  Mark dead inactive: {mark_dead_inactive}")
         print(f"  Dry run: {dry_run}")
         print(f"  Rate limit: {rate_limit}s between requests")
+        if check_links or add_descriptions:
+            print(f"  Estimated time: {est_minutes}m {est_seconds}s")
         print()
 
-        for file_path in gleaning_files:
+        start_time = time.time()
+
+        for idx, file_path in enumerate(gleaning_files, 1):
+            # Calculate progress and ETA
+            progress_pct = (idx / self.stats["total"]) * 100
+            elapsed = time.time() - start_time
+            if idx > 1:
+                avg_time_per_gleaning = elapsed / (idx - 1)
+                remaining = (self.stats["total"] - idx) * avg_time_per_gleaning
+                eta_min = int(remaining / 60)
+                eta_sec = int(remaining % 60)
+                eta_str = f" | ETA: {eta_min}m {eta_sec}s"
+            else:
+                eta_str = ""
+
+            print(f"[{idx}/{self.stats['total']} - {progress_pct:.1f}%{eta_str}]")
+
             self.maintain_gleaning(
                 file_path,
                 check_links=check_links,
