@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 1000px;
+            max-width: 700px;
             margin: 0 auto;
         }
 
@@ -326,7 +326,6 @@
             padding: 12px;
             background: #f9f9f9;
             border-radius: 8px;
-            border-left: 3px solid #007aff;
         }
 
         .result-tags {
@@ -402,7 +401,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>🔍 Temoa</h1>
+            <h1>Temoa</h1>
             <p class="subtitle">Semantic search for your vault</p>
         </header>
 
@@ -583,7 +582,6 @@
             if (!results || results.length === 0) {
                 resultsDiv.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">🔍</div>
                         <div>No results found for "${escapeHtml(query)}"</div>
                     </div>
                 `;
@@ -609,12 +607,10 @@
                             </div>
                             <div class="result-meta">
                                 <div class="result-meta-item">
-                                    <span>📁</span>
                                     <span class="result-path">${escapeHtml(result.relative_path)}</span>
                                 </div>
                                 ${result.created_date ? `
                                     <div class="result-meta-item">
-                                        <span>📅</span>
                                         <span>${escapeHtml(result.created_date)}</span>
                                     </div>
                                 ` : ''}
