@@ -71,11 +71,11 @@ class Gleaning:
 title: {quoted_title}
 url: {self.url}
 domain: {self.domain}
-date: {self.date}
+created: {self.date}
 source: {self.source_file}
 gleaning_id: {self.gleaning_id}
 status: {self.status}
-tags: [gleaning]
+type: gleaning
 ---
 
 # {self.title}

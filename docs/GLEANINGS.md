@@ -39,11 +39,14 @@ After extraction, each gleaning becomes an individual markdown file in `L/Gleani
 **Content**:
 ```markdown
 ---
+title: "Article Title"
 url: https://example.com/article
 domain: example.com
-date: 2025-11-15
+created: 2025-11-15
 source: Daily/2025/2025-11-15-Fr.md
-tags: [gleaning]
+gleaning_id: 9c72d1c06194
+status: active
+type: gleaning
 ---
 
 # Article Title

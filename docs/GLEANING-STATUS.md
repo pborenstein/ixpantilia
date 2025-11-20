@@ -53,11 +53,11 @@ When extraction runs, status is added to each gleaning's frontmatter:
 title: "Example Gleaning"
 url: https://example.com
 domain: example.com
-date: 2025-11-20
+created: 2025-11-20
 source: Daily/2025-11-20.md
 gleaning_id: abc123def456
 status: inactive
-tags: [gleaning]
+type: gleaning
 ---
 ```
 

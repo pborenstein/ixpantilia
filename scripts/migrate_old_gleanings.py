@@ -81,14 +81,22 @@ class OldGleaningMigrator:
         category = gleaning.get("category", "")
         timestamp = gleaning.get("timestamp", "")
 
+        # Quote title for YAML safety
+        quoted_title = json.dumps(title)
+
         # Build frontmatter
         frontmatter = f"""---
+title: {quoted_title}
 url: {url}
 domain: {domain}
-date: {date}
+created: {date}
 gleaning_id: {gleaning_id}
-tags: [gleaning{', ' + ', '.join(tags) if tags else ''}]
+status: active
+type: gleaning
 """
+        # Add legacy metadata from old gleanings
+        if tags:
+            frontmatter += f"legacy_tags: [{', '.join(tags)}]\n"
         if category:
             frontmatter += f"category: {category}\n"
         if timestamp:
