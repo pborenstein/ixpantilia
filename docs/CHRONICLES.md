@@ -2268,6 +2268,352 @@ We haven't validated:
 
 ---
 
+## Entry 11: Deployment Shakedown - Real-World Bugs Surface (2025-11-20)
+
+**Context**: First deployment to production machine. User working through `docs/DEPLOYMENT.md` to validate server setup and mobile access.
+
+**Session goal**: "We're going to spend the rest of this session debugging the server"
+
+---
+
+### The Bug Hunt
+
+**Testing health endpoint revealed the first issue:**
+```json
+{
+  "status": "healthy",
+  "synthesis": "connected",
+  "model": "all-MiniLM-L6-v2",
+  "vault": "/Users/philip/Obsidian/amoxtli",
+  "files_indexed": 0  ← Should be 2942!
+}
+```
+
+**User**: "See the files indexed"
+
+This kicked off a systematic debugging session that uncovered 4 critical bugs.
+
+---
+
+### Bug 1: Storage Path Mismatch
+
+**Symptom**: `files_indexed: 0` despite successful indexing of 2942 files
+
+**Investigation**:
+- Server startup logs showed: `EmbeddingStore initialized at: /Users/philip/projects/temoa/old-ideas/synthesis/embeddings`
+- But index was actually at: `/Users/philip/Obsidian/amoxtli/.temoa`
+
+**Root cause**: server.py:32-36 initialized SynthesisClient without `storage_dir` parameter:
+```python
+synthesis = SynthesisClient(
+    synthesis_path=config.synthesis_path,
+    vault_path=config.vault_path,
+    model=config.default_model
+    # Missing: storage_dir=config.storage_dir
+)
+```
+
+**Why it happened**: Config class has `storage_dir` property (alias for `index_path`), but we forgot to pass it to SynthesisClient.
+
+**Fix**: Add `storage_dir=config.storage_dir` parameter
+
+**Commit**: 7dfbe1c
+
+**Impact**: Health endpoint now reports correct file count, server uses correct index location
+
+**Lesson**: Testing in VM with test-vault didn't catch this because paths happened to align. Production deployment with different vault path exposed the bug.
+
+---
+
+### Bug 2: Circular Config Dependency
+
+**User observation**: "I think that where we search for the config file is kind of screwy. If I have the config file in the vault, and I run temoa server in some other directory, which config file does it use if the location of the vault is in the config file"
+
+**Excellent catch!** This is a circular dependency:
+- Config search included `.temoa/config.json` (relative to current directory)
+- Config contains `vault_path`
+- Can't find config without knowing vault location
+- Can't know vault location without reading config
+
+**Previous search order:**
+```python
+search_paths = [
+    Path(".temoa") / "config.json",  # Vault-local (relative to cwd!)
+    Path.home() / ".config" / "temoa" / "config.json",
+    Path.home() / ".temoa.json",
+    Path("config.json"),
+]
+```
+
+**Problem**: `.temoa/config.json` only works if you're *in* the vault directory when running `temoa server`. Otherwise it looks in wrong place.
+
+**Fix**: Remove vault-local search entirely. Config is global, index is local:
+```python
+search_paths = [
+    Path.home() / ".config" / "temoa" / "config.json",  # Global
+    Path.home() / ".temoa.json",                        # Global
+    Path("config.json"),                                # Dev only
+]
+```
+
+**Commit**: 35947f1
+
+**Impact**: Can run `temoa` commands from any directory. Config location is predictable.
+
+**Lesson**: User spotted a logical flaw we missed. The separation of concerns is clearer now: config (global) vs. index (local to vault).
+
+---
+
+### Bug 3: Gleaning Titles as MD5 Hashes
+
+**Testing search endpoint:**
+```bash
+curl "http://localhost:8080/search?q=obsidian&limit=3" | jq '.results[] | {title, score}'
+```
+
+**Result:**
+```json
+{"title": "e1471cc011dc", "score": 0.604}
+{"title": "66258962fc3a", "score": 0.598}
+{"title": "e3c53212c361", "score": 0.578}
+```
+
+**User**: "Why do gleanings have such crappy titles"
+
+**Investigation**: Gleanings use MD5 hash of URL as filename (for deduplication). Synthesis looks for `title:` in frontmatter, falls back to filename if not found.
+
+**Gleaning frontmatter was:**
+```yaml
+---
+url: https://...
+domain: openalternative.co
+date: 2025-01-17
+source: Daily/...
+tags: [gleaning]
+---
+
+# 12 Best Open Source Obsidian Alternatives  ← Title only in H1!
+```
+
+**No `title:` field!** So Synthesis used filename: `e1471cc011dc.md` → `e1471cc011dc`
+
+**Fix**:
+1. Updated `extract_gleanings.py` to add `title:` to frontmatter
+2. Created `scripts/add_titles_to_gleanings.py` to repair existing gleanings
+
+**Commit**: a1daadd
+
+**Result after fix:**
+```json
+{"title": "12 Best Open Source Obsidian Alternatives in 2025", "score": 0.604}
+{"title": "Obsidian Garden Gallery", "score": 0.598}
+{"title": "antoKeinanen/obsidian-sanctum-reborn: A minimalist theme...", "score": 0.578}
+```
+
+**Lesson**: Small missing detail (one frontmatter field) has huge UX impact. MD5 hashes are useless for users.
+
+---
+
+### Bug 4: YAML Parsing Errors
+
+**After fixing Bug 3, user ran repair script. New error:**
+```
+parse error: mapping values are not allowed here
+  in "<unicode string>", line 2, column 44:
+     ... obsidian-sanctum-reborn: A minimalist theme for Obsidia ...
+                               ^ This colon breaks YAML parsing
+```
+
+**Root cause**: Unquoted title values with colons are interpreted as YAML key-value pairs:
+```yaml
+title: obsidian-sanctum-reborn: A minimalist theme
+                              ^ YAML sees this as key:value
+```
+
+**Fix**: Quote title values using `json.dumps()`:
+```python
+quoted_title = json.dumps(self.title)
+frontmatter = f"title: {quoted_title}\n..."
+```
+
+**Result**:
+```yaml
+title: "obsidian-sanctum-reborn: A minimalist theme for Obsidian.md"
+```
+
+**Commit**: aeb0edf
+
+**Why json.dumps() not manual quotes**: Handles ALL YAML special characters correctly (colons, quotes, brackets, newlines, etc.)
+
+**Lesson**: YAML is picky about special characters. Using a proper serializer (json.dumps) is safer than manual string formatting.
+
+---
+
+### Enhancement: /extract API Endpoint
+
+**User**: "Do we have a way to extract new gleanings from the server?"
+
+**Current state**: Extraction only via CLI (`temoa extract`) or direct script invocation.
+
+**Request**: Add API endpoint to trigger extraction remotely (useful for mobile or automation).
+
+**Implementation**: `POST /extract` endpoint with:
+- `incremental=true` (default): Only process new files
+- `auto_reindex=true` (default): Automatically re-index after extraction
+
+**Response format:**
+```json
+{
+  "status": "success",
+  "total_gleanings": 10,
+  "new_gleanings": 5,
+  "duplicates_skipped": 5,
+  "files_processed": 3,
+  "reindexed": true,
+  "files_indexed": 2942
+}
+```
+
+**Commit**: c13e431
+
+**Impact**: Can trigger extraction via `curl -X POST http://localhost:8080/extract` from anywhere
+
+**Why this matters**: Phase 2.5 mobile validation. If user is on mobile and wants to extract today's gleanings, they can hit the endpoint instead of SSH'ing to server.
+
+---
+
+### Session Outcome
+
+**All bugs fixed and verified:**
+1. ✅ Health endpoint shows correct file count (2942)
+2. ✅ Config search works from any directory
+3. ✅ Gleaning titles display properly in search results
+4. ✅ YAML parsing handles all special characters
+5. ✅ Extraction available via API
+
+**Final test:**
+```bash
+curl "http://localhost:8080/search?q=obsidian&limit=3" | jq '.results[] | {title, score}'
+
+# Results:
+{
+  "title": "12 Best Open Source Obsidian Alternatives in 2025 – OpenAlternative",
+  "score": 0.6046920418739319
+}
+{
+  "title": "Obsidian Garden Gallery",
+  "score": 0.5983442068099976
+}
+{
+  "title": "antoKeinanen/obsidian-sanctum-reborn: A minimalist theme for Obsidian.md...",
+  "score": 0.5781234502792358
+}
+```
+
+**User**: "Perfect! All bugs fixed!"
+
+---
+
+### Commits in This Session
+
+```
+7dfbe1c - fix: pass storage_dir to SynthesisClient so health endpoint finds index
+35947f1 - fix: remove vault-local config search to avoid circular dependency
+a1daadd - fix: add title field to gleaning frontmatter for proper display
+aeb0edf - fix: quote title values in frontmatter to handle special YAML characters
+c13e431 - feat: add /extract endpoint for gleaning extraction via API
+```
+
+---
+
+### Insights
+
+**1. "Deployment is testing"**
+
+All 4 bugs were discovered during real deployment, not development:
+- Bug 1: Different vault path than test-vault
+- Bug 2: Running from different directory
+- Bug 3: Real gleanings with diverse titles
+- Bug 4: Special characters in production data
+
+**VM testing didn't catch these** because paths aligned and test data was simple.
+
+**Lesson**: Integration tests with synthetic data ≠ deployment with real data
+
+**2. User spotted the config logic flaw**
+
+User: "I think that where we search for the config file is kind of screwy..."
+
+**We missed it.** User caught the circular dependency immediately during deployment.
+
+**Why user caught it**: Thinking about actual usage ("run temoa server from some other directory") vs. development mindset ("run it from project root").
+
+**Lesson**: Real-world deployment scenarios reveal design flaws that tests miss.
+
+**3. Small details, big UX impact**
+
+Missing `title:` field → MD5 hashes instead of readable titles
+
+**User's reaction**: "Why do gleanings have such crappy titles"
+
+**One line of frontmatter.** Huge difference in usability.
+
+**Lesson**: UX bugs are often small implementation details, not architecture problems.
+
+**4. Progressive debugging works**
+
+Fix Bug 1 → reveals Bug 2
+Fix Bug 2 → reveals Bug 3
+Fix Bug 3 → reveals Bug 4
+
+**Each fix uncovered the next issue.** We didn't find all 4 bugs at once. We found them by:
+1. Testing one thing (health check)
+2. Fixing it
+3. Testing the next thing (config location)
+4. Repeat
+
+**Lesson**: Systematic testing > trying to catch everything upfront
+
+---
+
+### Status at Session End
+
+**Production deployment**: Tested and bugs fixed
+
+**Ready for Phase 2.5**: Yes
+- Server runs correctly
+- Health checks pass
+- Search returns proper titles
+- Extraction available via API
+- Config search logic is sound
+
+**Next step**: Continue with `docs/DEPLOYMENT.md` (Tailscale setup, mobile testing)
+
+**Current branch**: `claude/update-deployment-docs-018kB977ZBap7ENo4i1vPCaV`
+
+**Updated documents**:
+- `docs/IMPLEMENTATION.md` - Added "Deployment Shakedown" section
+- `docs/CHRONICLES.md` - Entry 11 (this entry)
+
+---
+
+### What This Means for Phase 2.5
+
+**Good news**: All showstopper bugs fixed before user testing
+
+**Better news**: User can now:
+- Run server from any directory (config fix)
+- See meaningful gleaning titles in search (title fix)
+- Extract gleanings remotely via API (new endpoint)
+- Trust health checks (storage path fix)
+
+**The hypothesis is testable now**:
+> "If I can search my vault from my phone in <2 seconds, I'll check it before Googling."
+
+**All the technology works.** Time to test the behavior.
+
+---
+
 ## Meta: How to Use This Document
 
 **When starting a new session:**
