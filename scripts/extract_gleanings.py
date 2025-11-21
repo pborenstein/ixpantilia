@@ -173,6 +173,7 @@ class GleaningsExtractor:
     def find_daily_notes(self, incremental: bool = True) -> List[Path]:
         """Find daily notes to process."""
         daily_notes = []
+        seen_paths = set()  # Track unique paths to avoid duplicates on case-insensitive filesystems
 
         # Search for daily notes (common patterns)
         patterns = [
@@ -184,9 +185,18 @@ class GleaningsExtractor:
 
         for pattern in patterns:
             for note in self.vault_path.glob(pattern):
+                # Resolve to absolute path to handle case-insensitive filesystem duplicates
+                note_resolved = note.resolve()
+
+                # Skip if we've already seen this file (case-insensitive duplicate)
+                if note_resolved in seen_paths:
+                    continue
+
                 # Skip if already processed in incremental mode
                 if incremental and str(note.relative_to(self.vault_path)) in self.state["processed_files"]:
                     continue
+
+                seen_paths.add(note_resolved)
                 daily_notes.append(note)
 
         return daily_notes
