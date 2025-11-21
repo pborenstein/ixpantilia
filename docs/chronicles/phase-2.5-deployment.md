@@ -965,3 +965,291 @@ The three-status model wasn't planned upfront. It emerged from running the tool 
 **Pattern to remember:** Build minimum, deploy, learn, refine. Don't try to predict every need upfront.
 
 ---
+
+## Entry 13: Archaeology Shakedown & Feature Discovery (2025-11-21)
+
+### Context
+
+After fixing search quality issues (min_score filtering, model upgrade to all-mpnet-base-v2, dark mode UI), user tested the `/archaeology` endpoint for the first time.
+
+**Initial result**: AttributeError - method called `trace_interest`, not `analyze_topic`.
+
+**This kicked off two discoveries:**
+1. Archaeology endpoint was broken (wrong method name)
+2. Archaeology answered the wrong question (led to feature insight)
+
+---
+
+### Bug: Wrong Method Name
+
+**Error:**
+```python
+AttributeError: 'TemporalArchaeologist' object has no attribute 'analyze_topic'
+```
+
+**Root cause:**
+- synthesis.py called `self.archaeologist.analyze_topic()`
+- Actual method in Synthesis: `trace_interest(query, threshold, exclude_daily)`
+- Also passed `top_k` parameter that doesn't exist (hardcoded to 50 in Synthesis)
+
+**Fix:**
+1. Changed method call to `trace_interest()`
+2. Replaced `top_k` parameter with `exclude_daily` (filter daily notes if needed)
+3. Properly serialized `InterestTimeline` NamedTuple to JSON dict
+
+**Commit:** c4ffe53 "fix: correct archaeology method call from analyze_topic to trace_interest"
+
+**Response structure now:**
+```json
+{
+  "query": "topic",
+  "threshold": 0.2,
+  "entries": [{"date": "2024-01-01", "content": "...", "similarity_score": 0.8}],
+  "intensity_by_month": {"2024-01": 0.75},
+  "activity_by_month": {"2024-01": 5},
+  "peak_periods": [{"month": "2024-01", "intensity": 0.75}],
+  "dormant_periods": ["2024-02"],
+  "model": "all-mpnet-base-v2"
+}
+```
+
+---
+
+### Discovery: What Archaeology Actually Does
+
+**User tested:** `/archaeology?q=a+time+for+monsters`
+
+**Result:**
+- 5 entries over 12 months (Nov 2024 → Nov 2025)
+- Sporadic interest (9 months dormant)
+- Peak in Aug 2025 (0.48 similarity)
+- Recent resurrection (Nov 2025)
+
+**User's question:** "Now, a better question about archaeology: what is it good for. what is it telling us?"
+
+**Analysis revealed:**
+
+**What archaeology IS:**
+- **Topic → Time mapping**: "Given a topic, when was I interested in it?"
+- Shows lifecycle: birth, growth, dormancy, resurrection
+- Good for: "Have I explored this before?"
+
+**Patterns it reveals:**
+- **Sporadic interest** (low activity, gaps) → passing references
+- **Deep dive** (high activity + intensity) → research phase
+- **Resurrection** (dormancy → activity) → renewed relevance
+
+**User's insight:** "this is actually interesting: What was I obsessed with in 2023"
+
+**Problem:** Archaeology can't answer this! It requires **Time → Topics mapping** (the inverse).
+
+---
+
+### Feature Discovery: "Themes by Period"
+
+**The missing capability:**
+```
+Current: archaeology("semantic search") → when did I care about this?
+Missing: themes(year=2023) → what did I care about?
+```
+
+**User request:** "how would I search for that I don't think archaeology can do it"
+
+**Correct!** Archaeology does **topic → time**. What's needed is **time → themes**.
+
+**Conceptual algorithm:**
+```python
+def discover_themes_by_period(
+    year: int,
+    min_cluster_size: int = 5
+) -> List[Theme]:
+    """Find dominant themes in a time period"""
+
+    # 1. Get all files from time period
+    files = filter_by_date(vault, year=year)
+
+    # 2. Get embeddings for all files
+    embeddings = [get_embedding(f) for f in files]
+
+    # 3. Cluster similar content
+    clusters = cluster_embeddings(embeddings, min_size)
+
+    # 4. Extract representative topic for each cluster
+    themes = []
+    for cluster in clusters:
+        representative_docs = get_cluster_centers(cluster)
+        theme = extract_theme_name(representative_docs)
+        themes.append({
+            "theme": theme,
+            "file_count": len(cluster),
+            "intensity": avg_similarity(cluster),
+            "sample_files": representative_docs[:5]
+        })
+
+    return sorted(themes, key=lambda t: t["file_count"], reverse=True)
+```
+
+**API endpoint concept:**
+```
+GET /themes?year=2023
+GET /themes?start=2023-01-01&end=2023-12-31
+GET /themes?period=2023-Q3
+```
+
+**Response:**
+```json
+{
+  "period": "2023",
+  "themes": [
+    {
+      "theme": "semantic search and embeddings",
+      "file_count": 45,
+      "avg_intensity": 0.68,
+      "peak_month": "2023-07",
+      "sample_files": ["...", "...", "..."]
+    },
+    {
+      "theme": "obsidian plugins and workflows",
+      "file_count": 32,
+      "avg_intensity": 0.55,
+      "peak_month": "2023-03",
+      "sample_files": ["...", "..."]
+    }
+  ]
+}
+```
+
+---
+
+### Implementation Considerations
+
+**Complexity:**
+- **Clustering**: Need sklearn/HDBSCAN for semantic clustering
+- **Theme extraction**: Tricky - how to name clusters?
+  - Option 1: Most frequent keywords (simple, may be generic)
+  - Option 2: LLM summary of cluster (accurate, requires API)
+  - Option 3: Representative document titles (simple, works often)
+- **Performance**: Clustering all vault embeddings could be slow
+- **Accuracy**: Small clusters may not have clear themes
+
+**Why it's valuable:**
+- Answers "what was I obsessed with?" question directly
+- Complements archaeology (topic → time vs time → topics)
+- Helps rediscover forgotten research threads
+- Shows evolution of interests over years
+
+**Workarounds until implemented:**
+1. Multiple archaeology queries with broad topics
+2. Manual review of files by date
+3. Daily notes as timeline proxy
+
+---
+
+### Decision: Document as Future Enhancement
+
+**DEC-022: Themes by Period - Future Enhancement**
+
+**Date**: 2025-11-21
+**Context**: User asked "What was I obsessed with in 2023?" - archaeology can't answer
+**Decision**: Document as potential Phase 3+ feature, continue Phase 2.5 validation
+**Rationale:**
+- Valuable capability discovered through real usage
+- Requires clustering infrastructure not yet built
+- Phase 2.5 focus: validate existing features before adding new ones
+- Behavior validation first, feature expansion second
+
+**Where documented:**
+- CHRONICLES.md Entry 13 (this entry) - discovery and analysis
+- IMPLEMENTATION.md Phase 4+ - added to future enhancements backlog
+- For now: Manual workarounds documented
+
+**When to revisit:**
+- After Phase 2.5 validation complete
+- If "time → themes" need surfaces repeatedly in usage
+- When clustering infrastructure justified by other needs
+
+---
+
+### Current Status: Archaeology Working
+
+**Fixed issues:**
+- ✅ Method name corrected (trace_interest)
+- ✅ Parameters aligned with Synthesis API
+- ✅ Response properly serialized to JSON
+- ✅ Endpoint documented with example output
+
+**Tested query:** "a time for monsters"
+- Shows sporadic interest pattern (5 entries, 12 months)
+- Peak in Aug 2025, dormant periods identified
+- Recent resurrection in Nov 2025
+
+**User's next step:** "let's continue shaking down the api/ui"
+
+---
+
+### Lessons Learned
+
+**1. Breaking features reveal missing features**
+
+Fixing archaeology bug led to trying it for first time → revealed what archaeology doesn't do → discovered "themes by period" gap.
+
+**Pattern:** Use → discover limits → identify complementary features
+
+**2. Real questions > imagined use cases**
+
+"What was I obsessed with in 2023?" is a **real question** from actual usage.
+
+Much more valuable than imagining features upfront. Phase 2.5 validation philosophy: let real usage reveal real needs.
+
+**3. Topic → Time vs Time → Topics**
+
+Archaeology is fundamentally **unidirectional**:
+- You already know the topic, find the timeline
+- Can't go the other way: find topics in a timeline
+
+**Inverse operations need different algorithms.** Can't just "reverse" archaeology.
+
+**4. Document for future, focus on present**
+
+Good idea doesn't mean implement now. Document clearly, add to backlog, continue Phase 2.5 validation.
+
+**Prevents:**
+- Feature creep during validation phase
+- Building before validating existing features work
+- Repeating old-gleanings over-engineering mistake
+
+---
+
+### Commits
+
+Search quality improvements (prior session):
+- 15dba1d: Narrow layout, remove blue border, remove emojis
+- ef4fb96: Dark mode with better card separation
+- c195cc7: Add New England flag footer
+- 9a7f1cf: Restore API docs and Status links to footer
+
+Archaeology fix (this session):
+- c4ffe53: Correct archaeology method call from analyze_topic to trace_interest
+
+---
+
+### Updated Documents
+
+- `docs/chronicles/phase-2.5-deployment.md` - Entry 13 (this entry)
+- `docs/IMPLEMENTATION.md` - Added "Themes by Period" to Phase 4+ backlog
+
+---
+
+### Next: Continue API/UI Shakedown
+
+User directive: "let's continue shaking down the api/ui"
+
+**Remaining endpoints to test:**
+- `/stats` - vault statistics
+- `/reindex` - force re-indexing
+- Search with various min_score thresholds
+- Mobile UI testing (responsive design)
+
+**Phase 2.5 goal:** Validate all features work before deciding what to build next.
+
+---

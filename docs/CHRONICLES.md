@@ -30,11 +30,12 @@ The chronicles have been split into chapters for easier navigation:
 - Entry 9: Gleanings Extraction Fixes
 
 ### [Phase 2.5: Deployment & Mobile Validation](chronicles/phase-2.5-deployment.md)
-**Entries 10-12** | Real-World Usage and Gleaning Management
+**Entries 10-13** | Real-World Usage and Gleaning Management
 
 - Entry 10: Mid-Course Assessment - Pausing Before Phase 3
 - Entry 11: Deployment Shakedown - Real-World Bugs Surface
 - Entry 12: Gleanings Status Management - Active, Inactive, Hidden
+- Entry 13: Archaeology Shakedown & Feature Discovery
 
 ---
 
@@ -49,6 +50,7 @@ The chronicles have been split into chapters for easier navigation:
 | DEC-015: Split implementation docs | 6 | Clearer phase tracking |
 | DEC-016: Three-status model | 12 | active/inactive/hidden |
 | DEC-017: Auto-restore inactive gleanings | 12 | Links that come back to life |
+| DEC-022: Themes by Period feature | 13 | Document for future, focus on present |
 
 ---
 
@@ -73,5 +75,5 @@ The chronicles have been split into chapters for easier navigation:
 ---
 
 **Created**: 2025-11-18
-**Last Updated**: 2025-11-20
-**Total Entries**: 12
+**Last Updated**: 2025-11-21
+**Total Entries**: 13
