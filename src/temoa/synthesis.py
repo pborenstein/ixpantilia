@@ -297,7 +297,7 @@ class SynthesisClient:
         self,
         query: str,
         threshold: float = 0.2,
-        top_k: int = 100
+        exclude_daily: bool = False
     ) -> Dict[str, Any]:
         """
         Perform temporal archaeology analysis.
@@ -308,14 +308,18 @@ class SynthesisClient:
         Args:
             query: Topic to analyze
             threshold: Similarity threshold (0.0-1.0, default: 0.2)
-            top_k: Number of documents to analyze (default: 100)
+            exclude_daily: If True, filter out daily notes (default: False)
 
         Returns:
             Dict with temporal analysis data:
             {
                 "query": str,
                 "threshold": float,
-                "timeline": [...],
+                "entries": [...],
+                "intensity_by_month": {...},
+                "activity_by_month": {...},
+                "peak_periods": [...],
+                "dormant_periods": [...],
                 "model": str
             }
 
@@ -329,18 +333,34 @@ class SynthesisClient:
             )
 
         try:
-            logger.debug(f"Archaeology: query='{query}', threshold={threshold}")
+            logger.debug(f"Archaeology: query='{query}', threshold={threshold}, exclude_daily={exclude_daily}")
 
-            timeline = self.archaeologist.analyze_topic(
+            # Call the correct method: trace_interest (not analyze_topic)
+            timeline = self.archaeologist.trace_interest(
                 query=query,
                 threshold=threshold,
-                top_k=top_k
+                exclude_daily=exclude_daily
             )
 
+            # Convert NamedTuple to dict for JSON serialization
             return {
-                "query": query,
+                "query": timeline.query,
                 "threshold": threshold,
-                "timeline": timeline,
+                "entries": [
+                    {
+                        "date": entry[0].isoformat(),
+                        "content": entry[1],
+                        "similarity_score": entry[2]
+                    }
+                    for entry in timeline.entries
+                ],
+                "intensity_by_month": timeline.intensity_by_month,
+                "activity_by_month": timeline.activity_by_month,
+                "peak_periods": [
+                    {"month": month, "intensity": intensity}
+                    for month, intensity in timeline.peak_periods
+                ],
+                "dormant_periods": timeline.dormant_periods,
                 "model": self.model_name
             }
 
