@@ -208,26 +208,25 @@ def main():
 
     print("FORMAT BREAKDOWN:")
     print(f"  ✓ Markdown links ([Title](URL)):        {total_markdown_links} (SUPPORTED)")
-    print(f"  ✗ Naked URLs with bullet (- https://):  {total_naked_with_bullet} (NOT SUPPORTED)")
-    print(f"  ✗ Naked URLs bare (https://):           {total_naked_bare} (NOT SUPPORTED)")
+    print(f"  ✓ Naked URLs with bullet (- https://):  {total_naked_with_bullet} (SUPPORTED - fetches title)")
+    print(f"  ✓ Naked URLs bare (https://):           {total_naked_bare} (SUPPORTED - fetches title)")
     print()
 
     print("FEATURE USAGE:")
-    print(f"  Timestamps [HH:MM]:                      {total_timestamps}")
-    print(f"  Multi-line descriptions (>2 lines):     {total_multi_line} (PARTIAL SUPPORT)")
+    print(f"  ✓ Timestamps [HH:MM]:                    {total_timestamps} (SUPPORTED)")
+    print(f"  ✓ Multi-line descriptions (>2 lines):   {total_multi_line} (FULLY SUPPORTED)")
     print()
 
-    # Show what's being missed
-    missing = total_naked_with_bullet + total_naked_bare
-    if missing > 0:
-        print(f"⚠️  MISSING: {missing} URLs not captured by current extraction!")
-        percentage = (missing / (total_markdown_links + missing)) * 100
-        print(f"   That's {percentage:.1f}% of your gleanings!")
+    # Note about naked URLs
+    naked_count = total_naked_with_bullet + total_naked_bare
+    if naked_count > 0:
+        print(f"📌 NOTE: {naked_count} naked URLs will have titles fetched from web")
+        print(f"   Extraction will take ~{naked_count * 1.5:.0f} seconds longer (fetching titles)")
         print()
 
     # Show samples
     if sample_naked_bullets:
-        print("SAMPLE: Naked URLs with bullet (not being extracted)")
+        print("SAMPLE: Naked URLs with bullet (title will be fetched)")
         print("-" * 70)
         for i, sample in enumerate(sample_naked_bullets, 1):
             print(f"{i}. File: {sample['file']}")
@@ -236,7 +235,7 @@ def main():
             print()
 
     if sample_naked_bare:
-        print("SAMPLE: Naked URLs bare (not being extracted)")
+        print("SAMPLE: Naked URLs bare (title will be fetched)")
         print("-" * 70)
         for i, sample in enumerate(sample_naked_bare, 1):
             print(f"{i}. File: {sample['file']}")
@@ -245,7 +244,7 @@ def main():
             print()
 
     if sample_multi_line:
-        print("SAMPLE: Multi-line descriptions (only first line extracted)")
+        print("SAMPLE: Multi-line descriptions (all lines will be captured)")
         print("-" * 70)
         for i, sample in enumerate(sample_multi_line, 1):
             print(f"{i}. File: {sample['file']}")
@@ -254,7 +253,7 @@ def main():
             print()
 
     print("=" * 70)
-    print("Run 'temoa extract' after fixing patterns to capture all formats")
+    print("✅ All formats are supported! Run 'temoa extract' to capture everything.")
 
 
 if __name__ == "__main__":
