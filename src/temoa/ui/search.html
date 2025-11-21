@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>🔍 Temoa</title>
+    <title>Temoa</title>
     <style>
         * {
             box-sizing: border-box;
@@ -13,10 +13,10 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f5f5f7;
+            background: #1a1a1a;
             padding: 16px;
             line-height: 1.5;
-            color: #1d1d1f;
+            color: #e0e0e0;
         }
 
         .container {
@@ -32,10 +32,11 @@
             font-size: 28px;
             font-weight: 600;
             margin-bottom: 8px;
+            color: #ffffff;
         }
 
         .subtitle {
-            color: #6e6e73;
+            color: #888888;
             font-size: 14px;
         }
 
@@ -48,23 +49,28 @@
             width: 100%;
             padding: 14px 16px;
             font-size: 16px;
-            border: 2px solid #d2d2d7;
-            border-radius: 12px;
-            background: #fff;
+            border: 1px solid #404040;
+            border-radius: 8px;
+            background: #2a2a2a;
+            color: #e0e0e0;
             transition: border-color 0.2s;
             outline: none;
         }
 
         #query:focus {
-            border-color: #007aff;
+            border-color: #666666;
+        }
+
+        #query::placeholder {
+            color: #666666;
         }
 
         .controls {
-            background: white;
+            background: #2a2a2a;
             padding: 16px;
             margin-bottom: 16px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            border: 1px solid #404040;
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px;
@@ -76,8 +82,8 @@
         }
 
         .control-label {
-            font-size: 14px;
-            color: #6e6e73;
+            font-size: 13px;
+            color: #888888;
             margin-bottom: 8px;
             font-weight: 500;
         }
@@ -85,15 +91,16 @@
         input[type="number"], input[type="text"] {
             padding: 10px 12px;
             font-size: 16px;
-            border: 1px solid #d2d2d7;
-            border-radius: 8px;
-            background: #fff;
+            border: 1px solid #404040;
+            border-radius: 6px;
+            background: #1a1a1a;
+            color: #e0e0e0;
             outline: none;
             transition: border-color 0.2s;
         }
 
         input[type="number"]:focus, input[type="text"]:focus {
-            border-color: #007aff;
+            border-color: #666666;
         }
 
         .checkbox-group {
@@ -113,7 +120,7 @@
             cursor: pointer;
             user-select: none;
             font-size: 14px;
-            color: #1d1d1f;
+            color: #e0e0e0;
         }
 
         .search-btn {
@@ -121,25 +128,26 @@
             padding: 14px;
             font-size: 16px;
             font-weight: 600;
-            background: #007aff;
-            color: white;
+            background: #404040;
+            color: #ffffff;
             border: none;
-            border-radius: 12px;
+            border-radius: 8px;
             cursor: pointer;
             transition: background 0.2s;
             margin-bottom: 24px;
         }
 
         .search-btn:hover {
-            background: #0051d5;
+            background: #4a4a4a;
         }
 
         .search-btn:active {
-            background: #004bb8;
+            background: #505050;
         }
 
         .search-btn:disabled {
-            background: #d2d2d7;
+            background: #2a2a2a;
+            color: #666666;
             cursor: not-allowed;
         }
 
@@ -147,7 +155,7 @@
             display: none;
             text-align: center;
             padding: 20px;
-            color: #6e6e73;
+            color: #888888;
         }
 
         .loading.active {
@@ -158,8 +166,8 @@
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 2px solid #d2d2d7;
-            border-top-color: #007aff;
+            border: 2px solid #404040;
+            border-top-color: #888888;
             border-radius: 50%;
             animation: spin 0.6s linear infinite;
         }
@@ -169,9 +177,9 @@
         }
 
         .error {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            color: #856404;
+            background: #3a2a1a;
+            border: 1px solid #5a3a1a;
+            color: #ffcc99;
             padding: 12px 16px;
             border-radius: 8px;
             margin-bottom: 16px;
@@ -183,11 +191,11 @@
         }
 
         .stats-panel {
-            background: white;
+            background: #2a2a2a;
             padding: 16px;
             margin-bottom: 16px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            border: 1px solid #404040;
             display: none;
         }
 
@@ -208,24 +216,24 @@
 
         .stat-label {
             font-size: 12px;
-            color: #86868b;
+            color: #666666;
             margin-bottom: 4px;
         }
 
         .stat-value {
             font-size: 18px;
             font-weight: 600;
-            color: #1d1d1f;
+            color: #e0e0e0;
         }
 
         .stat-value.model {
             font-size: 14px;
-            color: #007aff;
+            color: #888888;
         }
 
         .json-viewer {
-            background: #1d1d1f;
-            color: #f5f5f7;
+            background: #0a0a0a;
+            color: #e0e0e0;
             padding: 16px;
             border-radius: 8px;
             margin-bottom: 16px;
@@ -234,6 +242,7 @@
             overflow-x: auto;
             white-space: pre;
             display: none;
+            border: 1px solid #404040;
         }
 
         .json-viewer.active {
@@ -241,58 +250,58 @@
         }
 
         .results-header {
-            color: #6e6e73;
+            color: #888888;
             font-size: 14px;
-            margin-bottom: 12px;
+            margin-bottom: 16px;
             font-weight: 500;
         }
 
         .results-table {
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
         }
 
         .result-row {
-            padding: 16px;
-            border-bottom: 1px solid #f5f5f7;
-            transition: background 0.2s;
-        }
-
-        .result-row:last-child {
-            border-bottom: none;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #404040;
+            transition: all 0.2s;
         }
 
         .result-row:hover {
-            background: #fafafa;
+            background: #323232;
+            border-color: #505050;
         }
 
         .result-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
             gap: 16px;
         }
 
         .result-title-link {
             font-weight: 600;
-            color: #007aff;
+            color: #b0b0b0;
             text-decoration: none;
             font-size: 16px;
             flex: 1;
+            line-height: 1.4;
         }
 
         .result-title-link:hover {
+            color: #d0d0d0;
             text-decoration: underline;
         }
 
         .result-score-badge {
-            background: #007aff;
-            color: white;
+            background: #3a3a3a;
+            color: #c0c0c0;
             padding: 4px 10px;
-            border-radius: 12px;
+            border-radius: 6px;
             font-size: 13px;
             font-weight: 600;
             white-space: nowrap;
@@ -302,8 +311,8 @@
             display: flex;
             gap: 16px;
             font-size: 12px;
-            color: #86868b;
-            margin-bottom: 8px;
+            color: #666666;
+            margin-bottom: 12px;
             flex-wrap: wrap;
         }
 
@@ -315,17 +324,18 @@
 
         .result-path {
             font-family: 'Monaco', 'Menlo', monospace;
-            color: #6e6e73;
+            color: #777777;
         }
 
         .result-description {
-            color: #1d1d1f;
+            color: #b0b0b0;
             font-size: 14px;
             line-height: 1.6;
             margin-top: 12px;
-            padding: 12px;
-            background: #f9f9f9;
-            border-radius: 8px;
+            padding: 14px;
+            background: #222222;
+            border-radius: 6px;
+            border: 1px solid #3a3a3a;
         }
 
         .result-tags {
@@ -336,37 +346,33 @@
         }
 
         .tag {
-            background: #f5f5f7;
-            color: #6e6e73;
+            background: #3a3a3a;
+            color: #888888;
             padding: 4px 10px;
-            border-radius: 12px;
+            border-radius: 6px;
             font-size: 12px;
         }
 
         .empty-state {
             text-align: center;
             padding: 48px 24px;
-            color: #6e6e73;
-        }
-
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            color: #666666;
         }
 
         footer {
             margin-top: 40px;
             text-align: center;
-            color: #86868b;
+            color: #666666;
             font-size: 12px;
         }
 
         footer a {
-            color: #007aff;
+            color: #888888;
             text-decoration: none;
         }
 
         footer a:hover {
+            color: #b0b0b0;
             text-decoration: underline;
         }
 
@@ -498,12 +504,10 @@
             }
         });
 
-        // Focus on load
         window.addEventListener('load', () => {
             queryInput.focus();
         });
 
-        // Search on Enter key
         queryInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 search();
@@ -521,7 +525,6 @@
             const minScore = parseFloat(minScoreInput.value) || 0.3;
             const limit = parseInt(limitInput.value) || 20;
 
-            // Reset state
             errorDiv.classList.remove('active');
             loadingDiv.classList.add('active');
             resultsDiv.innerHTML = '';
@@ -588,11 +591,9 @@
                 return;
             }
 
-            // Show results header
             resultsHeader.textContent = `Found ${total} results for "${query}"`;
             resultsHeader.style.display = 'block';
 
-            // Render results as table
             const tableHtml = `
                 <div class="results-table">
                     ${results.map(result => `
