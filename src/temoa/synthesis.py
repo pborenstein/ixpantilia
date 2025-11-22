@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
 
+from .bm25_index import BM25Index, reciprocal_rank_fusion
+
 logger = logging.getLogger(__name__)
 
 
@@ -191,6 +193,14 @@ class SynthesisClient:
             logger.warning(f"Could not initialize temporal archaeologist: {e}")
             self.archaeologist = None
 
+        # Initialize BM25 index (for hybrid search)
+        try:
+            self.bm25_index = BM25Index(storage_dir=self.storage_dir)
+            logger.debug("BM25 index initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize BM25 index: {e}")
+            self.bm25_index = None
+
     def search(
         self,
         query: str,
@@ -297,6 +307,211 @@ class SynthesisClient:
         except Exception as e:
             logger.error(f"Search failed: {e}", exc_info=True)
             raise SynthesisError(f"Search failed: {e}")
+
+    def bm25_search(
+        self,
+        query: str,
+        limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Perform BM25 keyword search only (for debugging).
+
+        Args:
+            query: Search query string
+            limit: Optional result limit (default: 10)
+
+        Returns:
+            Dict with BM25 results
+
+        Raises:
+            SynthesisError: If BM25 not available
+        """
+        if self.bm25_index is None:
+            raise SynthesisError("BM25 index not available. Run 'temoa index' to build it.")
+
+        if limit is None:
+            limit = 10
+
+        try:
+            # Load BM25 index if needed
+            if self.bm25_index.bm25 is None:
+                self.bm25_index.load()
+
+            bm25_results = self.bm25_index.search(query, limit=limit)
+
+            # Enhance with Obsidian URIs
+            for result in bm25_results:
+                rel_path = result['relative_path']
+                path_no_ext = rel_path.rsplit('.md', 1)[0] if rel_path.endswith('.md') else rel_path
+                title = result.get('title', path_no_ext.split('/')[-1])
+
+                result.update({
+                    "obsidian_uri": f"obsidian://vault/{self.vault_name}/{quote(path_no_ext)}",
+                    "wiki_link": f"[[{title}]]",
+                    "file_path": str(self.vault_path / rel_path)
+                })
+
+            return {
+                "query": query,
+                "results": bm25_results,
+                "total": len(bm25_results),
+                "model": self.model_name,
+                "search_mode": "bm25"
+            }
+
+        except Exception as e:
+            logger.error(f"BM25 search failed: {e}", exc_info=True)
+            raise SynthesisError(f"BM25 search failed: {e}")
+
+    def hybrid_search(
+        self,
+        query: str,
+        limit: Optional[int] = None,
+        semantic_weight: float = 0.5
+    ) -> Dict[str, Any]:
+        """
+        Perform hybrid search combining semantic and keyword (BM25) search.
+
+        This combines the strengths of both approaches:
+        - Semantic search: Finds conceptually similar content
+        - Keyword (BM25): Finds exact mentions and term matches
+
+        Results are merged using Reciprocal Rank Fusion (RRF).
+
+        Args:
+            query: Search query string
+            limit: Optional result limit (default: 10)
+            semantic_weight: Weight for semantic vs keyword (0.0-1.0, default: 0.5)
+                            0.0 = keyword only, 1.0 = semantic only
+
+        Returns:
+            Dict with merged results:
+            {
+                "query": str,
+                "results": [...],  # Merged results with rrf_score
+                "total": int,
+                "model": str,
+                "search_mode": "hybrid"
+            }
+
+        Raises:
+            SynthesisError: If hybrid search fails or BM25 not available
+        """
+        if self.bm25_index is None:
+            raise SynthesisError(
+                "BM25 index not available. Run 'temoa index' to build it."
+            )
+
+        try:
+            logger.debug(f"Hybrid search: query='{query}', limit={limit}")
+
+            # Default limit
+            if limit is None:
+                limit = 10
+
+            # Get more results from each to ensure good coverage after merging
+            fetch_limit = limit * 3
+
+            # Perform both searches
+            semantic_results = []
+            bm25_results = []
+
+            # Semantic search (if weight > 0)
+            if semantic_weight > 0.0:
+                semantic_data = self.search(query, limit=fetch_limit)
+                semantic_results = semantic_data.get('results', [])
+                logger.debug(f"Semantic search found {len(semantic_results)} results")
+
+            # Keyword search (if weight < 1.0)
+            if semantic_weight < 1.0 and self.bm25_index.exists():
+                # Load BM25 index if needed
+                if self.bm25_index.bm25 is None:
+                    self.bm25_index.load()
+
+                bm25_results = self.bm25_index.search(query, limit=fetch_limit)
+                logger.debug(f"BM25 search found {len(bm25_results)} results")
+
+                # Enhance BM25 results with same format as semantic results
+                for result in bm25_results:
+                    rel_path = result['relative_path']
+                    path_no_ext = rel_path.rsplit('.md', 1)[0] if rel_path.endswith('.md') else rel_path
+                    title = result.get('title', path_no_ext.split('/')[-1])
+
+                    result.update({
+                        "obsidian_uri": f"obsidian://vault/{self.vault_name}/{quote(path_no_ext)}",
+                        "wiki_link": f"[[{title}]]",
+                        "file_path": str(self.vault_path / rel_path)
+                    })
+
+            # Merge using Reciprocal Rank Fusion
+            merged_results = reciprocal_rank_fusion([semantic_results, bm25_results])
+
+            # IMPORTANT: Boost top BM25 results that don't appear in semantic results
+            # RRF penalizes documents that only appear in one list, but high BM25 matches
+            # (exact keyword mentions) should still rank well even without semantic match
+            semantic_paths = {r.get('relative_path') for r in semantic_results}
+
+            # Get max RRF score to understand the scale
+            max_rrf = max((r.get('rrf_score', 0) for r in merged_results), default=0.1)
+
+            # Get max BM25 score for relative scoring
+            max_bm25 = bm25_results[0].get('bm25_score', 1.0) if bm25_results else 1.0
+
+            # Boost top BM25 results that are missing from semantic results
+            for idx, bm25_result in enumerate(bm25_results[:10]):  # Top 10 BM25
+                path = bm25_result.get('relative_path')
+                bm25_score = bm25_result.get('bm25_score', 0)
+
+                # Only boost if this is a BM25-only result (not in semantic)
+                if path not in semantic_paths:
+                    # Find this result in merged_results and boost it
+                    for merged_result in merged_results:
+                        if merged_result.get('relative_path') == path:
+                            old_rrf = merged_result.get('rrf_score', 0)
+
+                            # Boost proportional to BM25 score, but BELOW max_rrf
+                            # This ensures results in both lists still rank highest
+                            # Scale: 0.5 to 0.95 of max_rrf based on BM25 score
+                            score_ratio = bm25_score / max_bm25
+                            artificial_rrf = max_rrf * score_ratio * 0.95
+                            merged_result['rrf_score'] = artificial_rrf
+
+                            logger.debug(f"Boosting BM25-only result: {merged_result.get('title')} (BM25: {bm25_score:.3f}, ratio: {score_ratio:.2f}, old RRF: {old_rrf:.4f}, new RRF: {artificial_rrf:.4f})")
+                            break
+
+            # Re-sort by RRF score
+            merged_results.sort(key=lambda x: x.get('rrf_score', 0), reverse=True)
+
+            # Enrich merged results with individual scores for debugging
+            for result in merged_results:
+                path = result.get('relative_path')
+
+                # Find this result in semantic results
+                semantic_match = next((r for r in semantic_results if r.get('relative_path') == path), None)
+                if semantic_match:
+                    result['similarity_score'] = semantic_match.get('similarity_score', 0.0)
+
+                # Find this result in BM25 results
+                bm25_match = next((r for r in bm25_results if r.get('relative_path') == path), None)
+                if bm25_match:
+                    result['bm25_score'] = bm25_match.get('bm25_score', 0.0)
+
+            # Limit final results
+            merged_results = merged_results[:limit]
+
+            logger.debug(f"Hybrid search merged {len(merged_results)} results")
+
+            return {
+                "query": query,
+                "results": merged_results,
+                "total": len(merged_results),
+                "model": self.model_name,
+                "search_mode": "hybrid"
+            }
+
+        except Exception as e:
+            logger.error(f"Hybrid search failed: {e}", exc_info=True)
+            raise SynthesisError(f"Hybrid search failed: {e}")
 
     def archaeology(
         self,
@@ -441,17 +656,67 @@ class SynthesisClient:
         try:
             logger.info(f"Starting vault reindex (force={force})...")
 
-            # Trigger reindexing
-            success = self.pipeline.process_vault(force_rebuild=force)
+            # Read vault content once for both indexes
+            logger.info("Reading vault files...")
+            vault_content = self.pipeline.reader.read_vault()
 
-            if not success:
-                raise SynthesisError("Reindexing failed (process_vault returned False)")
+            if not vault_content:
+                logger.error("No content found in vault")
+                raise SynthesisError("No content found in vault")
 
-            # Get updated stats
-            stats = self.pipeline.get_stats()
-            files_indexed = stats.get("total_files") or stats.get("file_count", 0)
+            logger.info(f"Read {len(vault_content)} files from vault")
 
-            logger.info(f"✓ Reindexing complete: {files_indexed} files indexed")
+            # Build BM25 index FIRST (fast - takes seconds)
+            if self.bm25_index is not None:
+                logger.info("Building BM25 keyword index...")
+                try:
+                    documents = []
+                    for content_obj in vault_content:
+                        doc = {
+                            'relative_path': content_obj.relative_path,
+                            'title': content_obj.title,
+                            'content': content_obj.content,
+                            'tags': content_obj.tags,
+                            'frontmatter': content_obj.frontmatter
+                        }
+                        documents.append(doc)
+
+                    self.bm25_index.build(documents)
+                    logger.info(f"✓ BM25 index built: {len(documents)} documents")
+                except Exception as e:
+                    logger.warning(f"BM25 indexing failed: {e}")
+
+            # Build semantic embeddings SECOND (slow - takes minutes)
+            logger.info("Building semantic embeddings (this may take several minutes)...")
+
+            if force:
+                self.pipeline.store.clear()
+
+            texts = [content.content for content in vault_content]
+            embeddings = self.pipeline.engine.embed_texts(texts, show_progress=True)
+
+            metadata = []
+            for content in vault_content:
+                metadata.append({
+                    "relative_path": content.relative_path,
+                    "title": content.title,
+                    "tags": content.tags,
+                    "created_date": content.created_date,
+                    "modified_date": content.modified_date,
+                    "content_length": len(content.content),
+                    "frontmatter": content.frontmatter
+                })
+
+            model_info = {
+                "model_name": self.pipeline.engine.model_name,
+                "embedding_dim": embeddings.shape[1] if len(embeddings.shape) > 1 else 0
+            }
+
+            self.pipeline.store.save_embeddings(embeddings, metadata, model_info)
+
+            files_indexed = len(vault_content)
+            logger.info(f"✓ Semantic indexing complete: {files_indexed} files indexed")
+            logger.info(f"✓ Full reindexing complete: {files_indexed} files")
 
             return {
                 "status": "success",

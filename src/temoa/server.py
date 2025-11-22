@@ -217,6 +217,10 @@ async def search(
         default=False,
         description="Include daily notes in results (default: False)"
     ),
+    hybrid: Optional[bool] = Query(
+        default=None,
+        description="Use hybrid search (BM25 + semantic). Defaults to config setting."
+    ),
     model: Optional[str] = Query(
         default=None,
         description="Embedding model to use (optional)"
@@ -258,7 +262,10 @@ async def search(
         limit = config.search_max_limit
 
     try:
-        logger.info(f"Search: query='{q}', limit={limit}, min_score={min_score}, include_daily={include_daily}, model={model or 'default'}")
+        # Determine whether to use hybrid search
+        use_hybrid = hybrid if hybrid is not None else config.hybrid_search_enabled
+
+        logger.info(f"Search: query='{q}', limit={limit}, min_score={min_score}, include_daily={include_daily}, hybrid={use_hybrid}, model={model or 'default'}")
 
         # Note: model parameter not supported yet in current wrapper
         # Would require reinitializing Synthesis with different model
@@ -274,15 +281,33 @@ async def search(
 
         # Perform search (request more results to account for filtering)
         search_limit = limit * 2 if limit else 50
-        data = synthesis.search(query=q, limit=search_limit)
 
-        # Filter by similarity score first
+        # Choose search method
+        if use_hybrid:
+            try:
+                data = synthesis.hybrid_search(query=q, limit=search_limit)
+            except SynthesisError as e:
+                # Fall back to semantic search if hybrid fails
+                logger.warning(f"Hybrid search failed, falling back to semantic: {e}")
+                data = synthesis.search(query=q, limit=search_limit)
+                data["search_mode"] = "semantic (hybrid fallback)"
+        else:
+            data = synthesis.search(query=q, limit=search_limit)
+
+        # Filter by similarity score (but not in hybrid mode)
         results = data.get("results", [])
-        score_filtered = [r for r in results if r.get("similarity_score", 0) >= min_score]
 
-        score_removed = len(results) - len(score_filtered)
-        if score_removed > 0:
-            logger.info(f"Filtered {score_removed} results below min_score={min_score}")
+        if use_hybrid:
+            # In hybrid mode, RRF has already ranked results appropriately
+            # Don't filter by similarity score since BM25-only results may not have one
+            score_filtered = results
+            score_removed = 0
+        else:
+            # In semantic-only mode, filter by similarity threshold
+            score_filtered = [r for r in results if r.get("similarity_score", 0) >= min_score]
+            score_removed = len(results) - len(score_filtered)
+            if score_removed > 0:
+                logger.info(f"Filtered {score_removed} results below min_score={min_score}")
 
         # Filter out inactive gleanings
         original_count = len(score_filtered)
