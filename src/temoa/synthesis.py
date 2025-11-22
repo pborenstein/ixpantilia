@@ -308,6 +308,61 @@ class SynthesisClient:
             logger.error(f"Search failed: {e}", exc_info=True)
             raise SynthesisError(f"Search failed: {e}")
 
+    def bm25_search(
+        self,
+        query: str,
+        limit: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Perform BM25 keyword search only (for debugging).
+
+        Args:
+            query: Search query string
+            limit: Optional result limit (default: 10)
+
+        Returns:
+            Dict with BM25 results
+
+        Raises:
+            SynthesisError: If BM25 not available
+        """
+        if self.bm25_index is None:
+            raise SynthesisError("BM25 index not available. Run 'temoa index' to build it.")
+
+        if limit is None:
+            limit = 10
+
+        try:
+            # Load BM25 index if needed
+            if self.bm25_index.bm25 is None:
+                self.bm25_index.load()
+
+            bm25_results = self.bm25_index.search(query, limit=limit)
+
+            # Enhance with Obsidian URIs
+            for result in bm25_results:
+                rel_path = result['relative_path']
+                path_no_ext = rel_path.rsplit('.md', 1)[0] if rel_path.endswith('.md') else rel_path
+                title = result.get('title', path_no_ext.split('/')[-1])
+
+                result.update({
+                    "obsidian_uri": f"obsidian://vault/{self.vault_name}/{quote(path_no_ext)}",
+                    "wiki_link": f"[[{title}]]",
+                    "file_path": str(self.vault_path / rel_path)
+                })
+
+            return {
+                "query": query,
+                "results": bm25_results,
+                "total": len(bm25_results),
+                "model": self.model_name,
+                "search_mode": "bm25"
+            }
+
+        except Exception as e:
+            logger.error(f"BM25 search failed: {e}", exc_info=True)
+            raise SynthesisError(f"BM25 search failed: {e}")
+
     def hybrid_search(
         self,
         query: str,
@@ -390,6 +445,20 @@ class SynthesisClient:
 
             # Merge using Reciprocal Rank Fusion
             merged_results = reciprocal_rank_fusion([semantic_results, bm25_results])
+
+            # Enrich merged results with individual scores for debugging
+            for result in merged_results:
+                path = result.get('relative_path')
+
+                # Find this result in semantic results
+                semantic_match = next((r for r in semantic_results if r.get('relative_path') == path), None)
+                if semantic_match:
+                    result['similarity_score'] = semantic_match.get('similarity_score', 0.0)
+
+                # Find this result in BM25 results
+                bm25_match = next((r for r in bm25_results if r.get('relative_path') == path), None)
+                if bm25_match:
+                    result['bm25_score'] = bm25_match.get('bm25_score', 0.0)
 
             # Limit final results
             merged_results = merged_results[:limit]

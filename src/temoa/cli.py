@@ -83,9 +83,10 @@ def server(host, port, reload, log_level):
 @click.option('--limit', '-n', default=10, type=int, help='Number of results (default: 10)')
 @click.option('--min-score', '-s', default=0.3, type=float, help='Minimum similarity score (0.0-1.0, default: 0.3)')
 @click.option('--hybrid', is_flag=True, default=None, help='Use hybrid search (BM25 + semantic)')
+@click.option('--bm25-only', is_flag=True, help='Use BM25 keyword search only (for debugging)')
 @click.option('--model', '-m', default=None, help='Embedding model to use')
 @click.option('--json', 'output_json', is_flag=True, help='Output as JSON')
-def search(query, limit, min_score, hybrid, model, output_json):
+def search(query, limit, min_score, hybrid, bm25_only, model, output_json):
     """Search the vault for similar content.
 
     \b
@@ -94,6 +95,7 @@ def search(query, limit, min_score, hybrid, model, output_json):
       temoa search "tailscale networking" --limit 5
       temoa search "AI tools" --min-score 0.5
       temoa search "Joan Doe" --hybrid
+      temoa search "Joan Doe" --bm25-only
       temoa search "obsidian" --json
     """
     from .config import Config
@@ -109,32 +111,38 @@ def search(query, limit, min_score, hybrid, model, output_json):
             storage_dir=config.storage_dir
         )
 
-        # Determine whether to use hybrid search
-        use_hybrid = hybrid if hybrid is not None else config.hybrid_search_enabled
-
-        # Request more results to account for filtering
-        search_limit = limit * 2 if limit else 50
-
-        # Choose search method
-        if use_hybrid:
-            result_data = client.hybrid_search(query, limit=search_limit)
+        # Determine search mode
+        if bm25_only:
+            # BM25 only for debugging
+            result_data = client.bm25_search(query, limit=limit)
+            results = result_data.get('results', [])
         else:
-            result_data = client.search(query, limit=search_limit)
+            # Hybrid or semantic
+            use_hybrid = hybrid if hybrid is not None else config.hybrid_search_enabled
 
-        results = result_data.get('results', [])
+            # Request more results to account for filtering
+            search_limit = limit * 2 if limit else 50
 
-        # Filter by minimum similarity score
-        filtered_results = [r for r in results if r.get('similarity_score', 0) >= min_score]
+            # Choose search method
+            if use_hybrid:
+                result_data = client.hybrid_search(query, limit=search_limit)
+            else:
+                result_data = client.search(query, limit=search_limit)
 
-        # Apply final limit
-        filtered_results = filtered_results[:limit]
+            results = result_data.get('results', [])
 
-        # Update result data
-        result_data['results'] = filtered_results
-        result_data['total'] = len(filtered_results)
-        result_data['min_score'] = min_score
+            # Filter by minimum similarity score
+            filtered_results = [r for r in results if r.get('similarity_score', 0) >= min_score]
 
-        results = filtered_results
+            # Apply final limit
+            filtered_results = filtered_results[:limit]
+
+            # Update result data
+            result_data['results'] = filtered_results
+            result_data['total'] = len(filtered_results)
+            result_data['min_score'] = min_score
+
+            results = filtered_results
 
         if output_json:
             # Output as JSON for scripting
@@ -152,7 +160,20 @@ def search(query, limit, min_score, hybrid, model, output_json):
             for i, result in enumerate(results, 1):
                 click.echo(f"{i}. {click.style(result.get('title', 'Untitled'), fg='green', bold=True)}")
                 click.echo(f"   {result.get('relative_path', 'Unknown path')}")
-                click.echo(f"   Similarity: {result.get('similarity_score', 0):.3f}")
+
+                # Show both scores if available
+                sim_score = result.get('similarity_score')
+                bm25_score = result.get('bm25_score')
+
+                if sim_score is not None and bm25_score is not None:
+                    # Hybrid result - show both
+                    click.echo(f"   Semantic: {sim_score:.3f} | BM25: {bm25_score:.3f}")
+                elif bm25_score is not None:
+                    # BM25 only
+                    click.echo(f"   BM25: {bm25_score:.3f}")
+                elif sim_score is not None:
+                    # Semantic only
+                    click.echo(f"   Similarity: {sim_score:.3f}")
 
                 # Show description/snippet if available
                 if result.get('description'):
