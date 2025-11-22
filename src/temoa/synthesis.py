@@ -7,7 +7,7 @@ This module imports Synthesis code directly (not subprocess) to achieve
 import sys
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from urllib.parse import quote
@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 
 def serialize_datetime_values(obj: Any) -> Any:
     """
-    Recursively convert datetime objects to ISO format strings for JSON serialization.
+    Recursively convert datetime/date objects to ISO format strings for JSON serialization.
 
     Args:
         obj: Object to serialize (dict, list, or primitive)
 
     Returns:
-        Object with datetime values converted to ISO strings
+        Object with datetime/date values converted to ISO strings
     """
-    if isinstance(obj, datetime):
+    if isinstance(obj, (datetime, date)):
         return obj.isoformat()
     elif isinstance(obj, dict):
         return {k: serialize_datetime_values(v) for k, v in obj.items()}
