@@ -131,11 +131,15 @@ def search(query, limit, min_score, hybrid, bm25_only, model, output_json):
 
             results = result_data.get('results', [])
 
-            # Filter by minimum similarity score
-            filtered_results = [r for r in results if r.get('similarity_score', 0) >= min_score]
-
-            # Apply final limit
-            filtered_results = filtered_results[:limit]
+            # Filter by minimum similarity score (but not in hybrid mode)
+            if use_hybrid:
+                # In hybrid mode, RRF has already ranked results appropriately
+                # Don't filter by similarity score since BM25-only results may not have one
+                filtered_results = results[:limit]
+            else:
+                # In semantic-only mode, filter by similarity threshold
+                filtered_results = [r for r in results if r.get('similarity_score', 0) >= min_score]
+                filtered_results = filtered_results[:limit]
 
             # Update result data
             result_data['results'] = filtered_results
