@@ -650,7 +650,7 @@
                                 </a>
                                 <div class="result-score-badge">
                                     ${result.bm25_score !== undefined ?
-                                        `S: ${((result.similarity_score || 0) * 100).toFixed(1)}% | BM25: ${result.bm25_score.toFixed(1)}` :
+                                        `${((result.similarity_score || 0) * 100).toFixed(1)}% | ${result.bm25_score.toFixed(1)}` :
                                         `${((result.similarity_score || 0) * 100).toFixed(1)}%`
                                     }
                                 </div>
