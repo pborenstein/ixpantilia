@@ -294,13 +294,20 @@ async def search(
         else:
             data = synthesis.search(query=q, limit=search_limit)
 
-        # Filter by similarity score first
+        # Filter by similarity score (but not in hybrid mode)
         results = data.get("results", [])
-        score_filtered = [r for r in results if r.get("similarity_score", 0) >= min_score]
 
-        score_removed = len(results) - len(score_filtered)
-        if score_removed > 0:
-            logger.info(f"Filtered {score_removed} results below min_score={min_score}")
+        if use_hybrid:
+            # In hybrid mode, RRF has already ranked results appropriately
+            # Don't filter by similarity score since BM25-only results may not have one
+            score_filtered = results
+            score_removed = 0
+        else:
+            # In semantic-only mode, filter by similarity threshold
+            score_filtered = [r for r in results if r.get("similarity_score", 0) >= min_score]
+            score_removed = len(results) - len(score_filtered)
+            if score_removed > 0:
+                logger.info(f"Filtered {score_removed} results below min_score={min_score}")
 
         # Filter out inactive gleanings
         original_count = len(score_filtered)
