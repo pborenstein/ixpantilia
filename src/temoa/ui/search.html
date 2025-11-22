@@ -646,7 +646,11 @@
                                 ` : ''}
                                 ${result.frontmatter?.project ? (() => {
                                     const vaultName = result.obsidian_uri.split('/')[3];
-                                    const projectName = result.frontmatter.project.replace(/[\[\]]/g, '');
+                                    let project = result.frontmatter.project;
+                                    // Handle different project formats (string, array, etc.)
+                                    if (Array.isArray(project)) project = project[0];
+                                    if (typeof project !== 'string') project = String(project);
+                                    const projectName = project.replace(/[\[\]]/g, '');
                                     const projectUri = `obsidian://vault/${vaultName}/${encodeURIComponent(projectName)}`;
                                     return `
                                     <div class="result-meta-item">
