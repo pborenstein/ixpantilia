@@ -644,6 +644,11 @@
                                         <span>${escapeHtml(result.created_date)}</span>
                                     </div>
                                 ` : ''}
+                                ${result.frontmatter?.project ? `
+                                    <div class="result-meta-item">
+                                        <span>📁 ${escapeHtml(result.frontmatter.project)}</span>
+                                    </div>
+                                ` : ''}
                             </div>
                             ${result.description ? `
                                 <div class="result-description">${escapeHtml(result.description)}</div>
