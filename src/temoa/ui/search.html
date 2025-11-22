@@ -644,11 +644,15 @@
                                         <span>${escapeHtml(result.created_date)}</span>
                                     </div>
                                 ` : ''}
-                                ${result.frontmatter?.project ? `
+                                ${result.frontmatter?.project ? (() => {
+                                    const vaultName = result.obsidian_uri.split('/')[3];
+                                    const projectName = result.frontmatter.project.replace(/[\[\]]/g, '');
+                                    const projectUri = `obsidian://vault/${vaultName}/${encodeURIComponent(projectName)}`;
+                                    return `
                                     <div class="result-meta-item">
-                                        <span>📁 ${escapeHtml(result.frontmatter.project)}</span>
-                                    </div>
-                                ` : ''}
+                                        <span>Project: <a href="${projectUri}" style="color: #888888; text-decoration: underline;">${escapeHtml(projectName)}</a></span>
+                                    </div>`;
+                                })() : ''}
                             </div>
                             ${result.description ? `
                                 <div class="result-description">${escapeHtml(result.description)}</div>
